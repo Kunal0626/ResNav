@@ -354,6 +354,17 @@ target_test() {
   ( cd backend && "$PY" manage.py seed >/dev/null )
   echo "==> backend test suite"
   ( cd backend && "$PY" -m pytest -q )
+
+  echo
+  echo "==> SQL test suite"
+  # The runner never touches a password: connect() has already written the
+  # 0600 defaults file, and its path is all that is handed over. One place in
+  # the repo deals with credentials.
+  connect
+  RESNAV_MYSQL_BIN="$MYSQL_BIN" \
+  RESNAV_MYSQL_DEFAULTS_FILE="$DEFAULTS_FILE" \
+  RESNAV_MYSQL_DB="$DRA_MYSQL_DB" \
+    python3 -I db/tests/runner.py "$@"
 }
 
 target_lint() {
@@ -374,10 +385,33 @@ target_shell() {
   # Deliberately NOT `exec`. mysql_db is a shell function, which exec cannot
   # replace the process with -- and even with the binary spelled out, exec
   # would discard the EXIT trap and leak the temporary credentials file.
-  mysql_db
+  # Arguments are forwarded, so `./run.sh shell -e "SELECT 1"` works and
+  # `./run.sh shell < file.sql` still does too.
+  mysql_db "$@"
 }
 
-target_schema() { not_yet schema 3; }
+# Applies db/ in dependency order. Every file drops before it creates, so
+# running this twice is not an error and does not need a dropped database.
+target_schema() {
+  connect
+  local f
+  for f in db/schema/*.sql db/procedures/*.sql db/triggers/*.sql db/views/*.sql; do
+    [[ -e "$f" ]] || continue
+    printf '  applying %s\n' "$f"
+    if ! mysql_db < "$f"; then
+      echo "error: $f failed. Nothing after it was applied." >&2
+      return 1
+    fi
+  done
+  echo
+  mysql_db --table -e "
+    SELECT 'tables'    AS object, COUNT(*) AS n FROM information_schema.TABLES    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE='BASE TABLE'
+    UNION ALL SELECT 'views',     COUNT(*) FROM information_schema.VIEWS          WHERE TABLE_SCHEMA = DATABASE()
+    UNION ALL SELECT 'triggers',  COUNT(*) FROM information_schema.TRIGGERS       WHERE TRIGGER_SCHEMA = DATABASE()
+    UNION ALL SELECT 'routines',  COUNT(*) FROM information_schema.ROUTINES       WHERE ROUTINE_SCHEMA = DATABASE()
+    UNION ALL SELECT 'foreign keys', COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE='FOREIGN KEY'
+    UNION ALL SELECT 'check constraints', COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE='CHECK';"
+}
 target_seed()   { not_yet seed 5; }
 target_reset()  { not_yet reset 5; }
 target_demo()   { not_yet demo 8; }
@@ -390,7 +424,12 @@ usage() {
 }
 
 main() {
-  case "${1:-}" in
+  local target="${1:-}"
+  # Drop the target name so the rest can be forwarded. `shell` in particular
+  # is useless without it: `./run.sh shell -e "SELECT 1"` previously ignored
+  # the -e entirely and sat waiting on stdin.
+  [[ $# -gt 0 ]] && shift
+  case "$target" in
     install) target_install ;;
     check)   target_check ;;
     docs)    target_docs ;;
@@ -399,13 +438,13 @@ main() {
     reset)   target_reset ;;
     api)     target_api ;;
     web)     target_web ;;
-    test)    target_test ;;
+    test)    target_test "$@" ;;
     lint)    target_lint ;;
     build)   target_build ;;
     demo)    target_demo ;;
-    shell)   target_shell ;;
+    shell)   target_shell "$@" ;;
     ""|-h|--help|help) usage ;;
-    *) echo "error: unknown target '${1}'" >&2; echo >&2; usage ;;
+    *) echo "error: unknown target '${target}'" >&2; echo >&2; usage ;;
   esac
 }
 

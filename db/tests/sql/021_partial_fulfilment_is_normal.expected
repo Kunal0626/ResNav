@@ -1,0 +1,8 @@
+check_name	status
+status	allocated
+check_name	quantity_allocated
+allocated	10.000
+check_name	outstanding
+outstanding	90.000
+check_name	fulfilment_ratio
+ratio	0.1000

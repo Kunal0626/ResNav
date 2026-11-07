@@ -150,6 +150,18 @@ erDiagram
         enum     change_type     "allocation / restock / adjustment"
         datetime created_at
     }
+    StockAlerts {
+        bigint   id                 PK
+        int      provider_id        FK "composite FK part 1"
+        smallint resource_id        FK "composite FK part 2"
+        decimal  quantity_at_alert
+        decimal  threshold_at_alert
+        enum     status             "open / resolved"
+        datetime raised_at
+        datetime resolved_at
+        int      open_provider_id   "generated: NULL unless open"
+        smallint open_resource_id   "generated: NULL unless open"
+    }
     AuditLog {
         bigint   id             PK
         varchar  actor
@@ -223,6 +235,7 @@ erDiagram
     ServiceCategory ||--o{ ServicesOffered         : "classifies"
     ServiceCategory ||--o{ EmergencyContact        : "groups"
     Requests        ||--o{ Allocations             : "is satisfied by"
+    StockLevels     ||--o{ StockAlerts             : "raises"
 ```
 
 `AuditLog` and `UserQuery` have no relationship lines on purpose — see §6.3.
@@ -385,6 +398,19 @@ one: **a multi-column `UNIQUE` index does not constrain rows where any indexed
 column is `NULL`.** Generated columns that go `NULL` when an alert is resolved
 give exactly the wanted behaviour — open rows held unique, resolved rows
 ignored. Probe `partial_unique_allows_resolved_dupes` confirms it.
+
+### 7.1b StockAlerts was added during Phase 3
+
+Phase 2's model had no alerts table: low-stock events were to be rows in
+`AuditLog`, as ResNav did it. Writing the triggers showed that will not carry
+R5. "Exactly one **open** alert" is a statement about *state* — raised, still
+standing, later resolved — and an append-only log has no state to be in. A log
+can record that a threshold was crossed; it cannot answer "what is short right
+now" without scanning and de-duplicating, and it cannot be resolved.
+
+So `StockAlerts` exists, with the `NULL`-in-a-unique-index construction of
+§7.1 doing the work. It is the one entity added after the Phase 2 diagram was
+agreed, and it is why the schema has 17 tables rather than 16.
 
 ### 7.2 Check-then-insert is a race; the upsert is not
 

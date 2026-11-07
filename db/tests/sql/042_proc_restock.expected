@@ -1,0 +1,9 @@
+check_name	@total
+new_total	35.000
+check_name	change_type	quantity_before	quantity_after
+history	restock	10.000	35.000
+check_name	action_type
+audit	restock
+check_name	provider_id	resource_id	quantity
+created_row	2	2	15.000
+ERROR 1644 (45000) at line 13: bad_quantity: restock must be positive

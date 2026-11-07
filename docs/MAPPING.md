@@ -134,6 +134,7 @@ Mixed-case tables beside lower-case views is not pretty, but churn is worse.
 | `EmergencyContact` | keep | types only. Rendered on the results page. |
 | `UserQuery` | keep | types only. Write-only by design: anonymised search log. |
 | `SystemLog` | **drop** | 100% overlap with `AuditLog`, which already has `action_type`, `table_name`, `record_id` and `details`. One write site, folded into `AuditLog`. |
+| `StockAlerts` | **new** (Phase 3) | Added while writing the triggers: "exactly one open alert" is a statement about state, which an append-only `AuditLog` cannot hold. See DESIGN.md §7.1b. |
 | `AllocationHistory` | **drop** | Dead: zero references, including its own four indexes. Its columns (`qty_before`, `qty_after`, `action`, `performed_by`) duplicate `StockHistory` plus `AuditLog`. |
 
 ### Views

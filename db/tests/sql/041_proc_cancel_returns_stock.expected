@@ -1,0 +1,12 @@
+check_name	@released
+released_units	45.000
+check_name	@rlegs
+released_legs	2
+check_name	provider_id	quantity
+stock_restored	1	10.000
+stock_restored	2	40.000
+stock_restored	3	100.000
+check_name	status	COUNT(*)
+allocations_kept	released	2
+check_name	status
+request_status	rejected

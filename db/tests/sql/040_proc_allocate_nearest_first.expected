@@ -1,0 +1,13 @@
+check_name	@alloc
+allocated	45.000
+check_name	@legs
+legs	2
+check_name	@st
+status	fulfilled
+check_name	provider_id	quantity_allocated
+per_provider	1	10.000
+per_provider	2	35.000
+check_name	provider_id	quantity
+stock_after	1	0.000
+stock_after	2	5.000
+stock_after	3	100.000

@@ -1,0 +1,10 @@
+check_name	quantity
+stock_after	70.000
+check_name	status
+request_status	fulfilled
+check_name	closed_at IS NOT NULL
+closed_at_set	1
+check_name	change_type	quantity_before	quantity_after
+history_rows	allocation	100.000	70.000
+check_name	action_type	previous_value	new_value
+audit_rows	stock_update	100.000	70.000

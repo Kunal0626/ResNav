@@ -1,0 +1,4 @@
+ERROR 3819 (HY000) at line 4: Check constraint 'ck_requests_severity' is violated.
+ERROR 3819 (HY000) at line 6: Check constraint 'ck_requests_quantity' is violated.
+ERROR 3819 (HY000) at line 8: Check constraint 'ck_zones_latitude' is violated.
+ERROR 3819 (HY000) at line 12: Check constraint 'ck_allocations_quantity' is violated.

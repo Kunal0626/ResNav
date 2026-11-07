@@ -1,0 +1,1 @@
+ERROR 1644 (45000) at line 4: stock_negative: provider 1 resource 1 would fall to -1.000

@@ -1,0 +1,1 @@
+ERROR 1451 (23000) at line 8: Cannot delete or update a parent row: a foreign key constraint fails (`resnav`.`allocations`, CONSTRAINT `fk_allocations_request` FOREIGN KEY (`request_id`) REFERENCES `requests` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE)

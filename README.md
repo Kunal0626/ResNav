@@ -47,7 +47,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 0 | Audit ResNav: build it from scratch, measure every claim | **done** — [`docs/AUDIT.md`](docs/AUDIT.md) |
 | 1 | Restructure the repo, import ResNav, unify configuration | **done** |
 | 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | **done** — [`MAPPING.md`](docs/MAPPING.md), [`DESIGN.md`](docs/DESIGN.md), [`NORMALIZATION.md`](docs/NORMALIZATION.md) |
-| 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | not started |
+| 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | **done** — `make schema`, 14 SQL tests |
 | 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | not started |
 | 5 | One deterministic seed, plus a tiny hand-checkable set | not started |
 | 6 | Concurrency proof: oversell, isolation levels, deadlock | not started |
@@ -128,11 +128,12 @@ password stays out of `ps` output and shell history.
 | `install` | backend venv + `npm install` | yes |
 | `check` | MySQL access and SQL feature probe | yes |
 | `docs` | grammar-check the Mermaid diagrams | yes |
-| `test` | backend test suite | yes — 51 tests |
+| `test` | backend suite + SQL suite | yes — 51 + 14 tests |
 | `lint` | `ruff` + `eslint` | yes |
 | `build` | production frontend build | yes |
 | `api` / `web` | development servers | yes |
-| `schema` / `seed` / `reset` | build the MySQL database | **no** — Phase 3 and 5 |
+| `schema` | create tables, triggers, procedures, views | yes |
+| `seed` / `reset` | load sample data | **no** — Phase 5 |
 | `demo` | end-to-end worked demo | **no** — Phase 8 |
 
 Targets that are not built yet fail with the phase they arrive in rather than
@@ -142,8 +143,9 @@ pretending to succeed.
 
 Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
 
-- **The MySQL layer does not exist yet.** The app still runs on SQLite. Every
-  database claim in the opening paragraph describes the target, not today.
+- **The backend still runs on SQLite.** The MySQL layer exists and is tested
+  (`make schema`, then `make test`), but nothing is connected to it yet — the
+  port is Phase 4, and there is no seed data until Phase 5.
 - **Test isolation is broken.** The suite's 51 tests pass, but they run against
   `backend/instance/resource_navigator.db` rather than the isolated temporary
   database the fixtures build, and they mutate it as they go — so the suite is

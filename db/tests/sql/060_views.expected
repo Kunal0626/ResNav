@@ -1,0 +1,17 @@
+check_name	provider_name	quantity	is_low
+stock_summary	Guwahati Relief Centre	0.000	1
+stock_summary	Delhi Relief Centre	5.000	0
+stock_summary	Chennai Relief Centre	100.000	0
+check_name	provider_name	quantity	threshold	shortfall
+low_stock	Guwahati Relief Centre	0.000	5.000	5.000
+check_name	provider_name	total_allocations	reliability
+reliability	Guwahati Relief Centre	1	1.0000
+reliability	Delhi Relief Centre	1	1.0000
+reliability	Chennai Relief Centre	0	0.7000
+check_name	request_id	quantity_requested	quantity_allocated	outstanding	status
+fulfilment	930	45.000	45.000	0.000	fulfilled
+check_name	zone_name	total_requested	total_allocated	shortage_ratio
+zone_shortage	Guwahati Flood Zone	45.000	45.000	0.0000
+check_name	resource_name	requests	fulfilled	fulfilment_rate
+rollup	Blankets	1	1	1.0000
+rollup	ALL RESOURCES	1	1	1.0000

@@ -1,0 +1,11 @@
+check_name	COUNT(*)
+after_first_drop	1
+check_name	COUNT(*)
+after_three_drops	1
+check_name	provider_id	resource_id	quantity_at_alert	threshold_at_alert
+alert_detail	1	1	4.000	5.000
+check_name	status	COUNT(*)
+after_recovery	resolved	1
+check_name	status	COUNT(*)
+second_shortage	open	1
+second_shortage	resolved	1
