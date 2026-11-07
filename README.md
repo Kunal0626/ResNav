@@ -51,7 +51,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | **done** |
 | 5 | One deterministic seed, plus a tiny hand-checkable set | **done** — `make reset` |
 | 6 | Concurrency proof: oversell, isolation levels, deadlock | **done** — [`CONCURRENCY.md`](docs/CONCURRENCY.md) |
-| 7 | Surface alerts, audit log and "why this centre" in the UI | not started |
+| 7 | Surface alerts, audit log and "why this centre" in the UI | **done** — [screenshots](docs/screenshots/) |
 | 8 | Run anywhere: Docker and a no-Docker local path | not started |
 | 9 | Measure, rewrite this README, interview notes | not started |
 
@@ -165,6 +165,18 @@ password stays out of `ps` output and shell history.
 
 Targets that are not built yet fail with the phase they arrive in rather than
 pretending to succeed.
+
+## Screenshots
+
+Captured from the running app against the deterministic seed, so every number
+is reproducible with `make reset`. See
+[`docs/screenshots/`](docs/screenshots/README.md).
+
+| | |
+|---|---|
+| [Standing low-stock alerts](docs/screenshots/stock-alerts.jpg) | Raised by a trigger when stock crossed its threshold, resolved automatically when it recovers |
+| [Audit trail](docs/screenshots/audit-log.jpg) | Append-only. The `stock_update` rows are written by a trigger, so no caller can skip them |
+| [Allocation plan](docs/screenshots/allocation-plan.jpg) | Distances 3.8 → 593.3 → 663.8 → 788.0 → 833.8 km: nearest-first, ordered by the database |
 
 ## Limitations and known defects
 

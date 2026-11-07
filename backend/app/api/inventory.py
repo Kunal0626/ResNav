@@ -27,11 +27,19 @@ URGENCY_RANGE = (0.1, 3.0)
 
 
 @bp.get("/stock")
-def list_stock():
-    low_only = request.args.get("low") in ("1", "true", "yes")
-    if not has_core_tables():
-        return jsonify({"stock": [], "available": False})
-    return jsonify({"available": True, "stock": queries.stock_levels(low_only=low_only)})
+def stock():
+    low_only = request.args.get("low_only", "").lower() in {"1", "true", "yes"}
+    rows = queries.stock_levels(low_only=low_only)
+    return jsonify({
+        "stock": rows,
+        # Standing alerts, which are NOT the same as the is_low flag on each
+        # row. is_low is recomputed from the current quantity on every
+        # request; an alert is state the database raised when stock crossed
+        # the threshold and will resolve when it recovers, so it knows WHEN
+        # the shortage began.
+        "alerts": queries.open_stock_alerts(),
+        "available": True,
+    })
 
 
 @bp.get("/requests")

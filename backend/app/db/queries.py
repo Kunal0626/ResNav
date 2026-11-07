@@ -153,6 +153,36 @@ def stock_levels(conn: Conn = None, *, low_only: bool = False) -> list[dict[str,
     return rows_to_dicts(query_all(sql, (), conn))
 
 
+def open_stock_alerts(conn: Conn = None) -> list[dict[str, Any]]:
+    """Low-stock alerts that are currently standing.
+
+    Not the same thing as "lines below threshold", which /api/stock already
+    reports as is_low. That is recomputed on every request from the current
+    quantity; this is tracked STATE, raised by trg_stocklevels_au_alert the
+    moment stock crossed the line and resolved when it came back. So it
+    carries raised_at -- when the shortage started, not when someone last
+    looked -- and it survives the quantity moving around underneath it.
+
+    At most one open alert per (centre, resource) exists at a time. That is
+    enforced by a unique index over generated columns that go NULL when an
+    alert resolves, which is how MySQL emulates a partial index.
+    """
+    return query_all("""
+        SELECT a.id, a.provider_id, p.name AS provider_name,
+               a.resource_id, r.name AS resource_name, r.unit,
+               a.quantity_at_alert, a.threshold_at_alert, a.raised_at,
+               sl.quantity AS quantity_now,
+               (a.threshold_at_alert - sl.quantity) AS shortfall
+        FROM StockAlerts a
+        JOIN Providers   p  ON p.id = a.provider_id
+        JOIN Resources   r  ON r.id = a.resource_id
+        JOIN StockLevels sl ON sl.provider_id = a.provider_id
+                           AND sl.resource_id = a.resource_id
+        WHERE a.status = 'open'
+        ORDER BY (a.threshold_at_alert - sl.quantity) DESC, a.raised_at ASC
+    """, (), conn)
+
+
 def list_requests(conn: Conn = None, *, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     sql = """
         SELECT rq.id, rq.zone_id, z.zone_name AS zone,

@@ -22,7 +22,7 @@ import { useAction, useApi } from '../hooks/useApi';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { api } from '../lib/api';
 import { STATUS_TONE } from '../lib/constants';
-import { formatNumber, formatRelative, titleCase } from '../lib/format';
+import { formatDistance, formatNumber, formatRelative, titleCase } from '../lib/format';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All' },
@@ -421,6 +421,11 @@ function AllocationDialog({ request, onClose, onAllocated }) {
           <>
             <div className="border-b border-[var(--rn-border)] px-5 py-4">
               <p className="ai-reasoning-box text-[0.8125rem] leading-relaxed">{plan.message}</p>
+              <p className="mt-2 text-[0.6875rem] text-[var(--rn-text-3)]">
+                Centres are drawn nearest-first. This order is produced by the
+                database, by the same expression the dispatch itself uses, so
+                the plan below is what will actually happen.
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge tone={plan.fully_satisfiable ? 'emerald' : 'amber'}>
                   {plan.coverage_pct}% coverage
@@ -440,6 +445,10 @@ function AllocationDialog({ request, onClose, onAllocated }) {
                   <thead>
                     <tr>
                       <th scope="col">Centre</th>
+                      {/* The distance the allocator actually ordered by. Before
+                          zones carried coordinates this could only be a
+                          same-state yes/no, so there was nothing to show. */}
+                      <th scope="col">Distance</th>
                       <th scope="col">Allocate</th>
                       <th scope="col">Stock after</th>
                     </tr>
@@ -452,6 +461,9 @@ function AllocationDialog({ request, onClose, onAllocated }) {
                           <p className="mt-0.5 text-[0.6875rem] text-[var(--rn-text-3)]">
                             {leg.reasoning}
                           </p>
+                        </td>
+                        <td className="tabular-nums text-[var(--rn-text-2)]">
+                          {leg.distance_km == null ? '—' : formatDistance(leg.distance_km)}
                         </td>
                         <td className="tabular-nums font-semibold text-[var(--rn-text)]">
                           {formatNumber(leg.allocate_qty)}

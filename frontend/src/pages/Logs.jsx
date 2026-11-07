@@ -18,14 +18,20 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { api } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 
+// One entry per value of AuditLog.action_type in db/schema/01_tables.sql.
+// Anything unmapped still renders, in slate, rather than vanishing.
 const ACTION_TONES = {
   allocation: 'emerald',
+  release: 'amber',
   request_create: 'indigo',
   request_update: 'blue',
   stock_update: 'cyan',
   restock: 'emerald',
   alert: 'red',
   risk_update: 'amber',
+  threshold_change: 'amber',
+  zone_update: 'blue',
+  navigation: 'slate',
   system: 'slate',
 };
 

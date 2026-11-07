@@ -8,8 +8,11 @@ implicitly dependent on import order. A factory fixes all three.
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime
+from decimal import Decimal
 
 from flask import Flask, jsonify, request
+from flask.json.provider import DefaultJSONProvider
 
 from .core.config import Settings, get_settings
 from .core.errors import register_error_handlers
@@ -23,8 +26,37 @@ API_PREFIX = "/api"
 MAX_BODY_BYTES = 1 * 1024 * 1024
 
 
+class _JSONProvider(DefaultJSONProvider):
+    """Serialise datetimes as ISO 8601 instead of an HTTP-date.
+
+    Flask's default renders a datetime as "Sat, 07 Nov 2026 23:08:03 GMT".
+    Under SQLite this never came up: timestamps were TEXT columns and arrived
+    as plain "YYYY-MM-DD HH:MM:SS" strings. PyMySQL returns real datetime
+    objects, so after the port every timestamp in the UI silently changed
+    format -- and the frontend's date helpers, which expect the old shape,
+    gave up and printed the raw string.
+
+    The "GMT" is the worse half. MySQL's NOW(6) is the server's local time
+    and carries no zone, so labelling it GMT shifts every displayed time by
+    the UTC offset -- five and a half hours here.
+
+    ISO 8601 without a zone is what the data actually is: a local wall-clock
+    time. new Date("2026-11-07T23:08:03") parses it as local, which is right.
+    """
+
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat(sep=" ", timespec="seconds")
+        if isinstance(o, date):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
+
+
 def create_app(settings: Settings | None = None) -> Flask:
     settings = settings or get_settings()
+    Flask.json_provider_class = _JSONProvider
     configure_logging(settings.log_level, json_output=settings.is_production)
 
     app = Flask(__name__)

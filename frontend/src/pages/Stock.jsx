@@ -40,6 +40,16 @@ export function Stock() {
 
   const lowCount = (data?.stock ?? []).filter((row) => row.is_low).length;
 
+  // Two different things, deliberately shown separately.
+  //
+  //   lowCount  is recomputed from the current quantity on every request:
+  //             "how many lines are under threshold right now".
+  //   alerts    is state the database raised the moment stock crossed the
+  //             line and will resolve when it recovers, so it knows WHEN
+  //             the shortage started. At most one open alert can exist per
+  //             centre and resource.
+  const alerts = data?.alerts ?? [];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -53,6 +63,46 @@ export function Stock() {
         }
       />
 
+      {alerts.length > 0 ? (
+        <Card className="overflow-hidden border-amber-500/30">
+          <CardHeader
+            title="Standing low-stock alerts"
+            subtitle={
+              `${alerts.length} open · raised by a database trigger the moment stock ` +
+              `crossed its threshold, and resolved automatically when it recovers`
+            }
+          />
+          <div className="divide-y divide-[var(--rn-line)]">
+            {alerts.map((alert) => (
+              <div
+                key={alert.id}
+                className="flex flex-wrap items-center gap-3 px-4 py-3 text-xs sm:px-5"
+              >
+                <Icon name="alert" className="h-4 w-4 shrink-0 text-amber-500" />
+                <div className="min-w-[12rem] flex-1">
+                  <p className="font-medium text-[var(--rn-text)]">{alert.resource_name}</p>
+                  <p className="text-[var(--rn-text-2)]">{alert.provider_name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-[var(--rn-text)]">
+                    {formatNumber(alert.quantity_now)}{' '}
+                    <span className="text-[var(--rn-text-2)]">
+                      / {formatNumber(alert.threshold_at_alert)} {alert.unit}
+                    </span>
+                  </p>
+                  <p className="text-[var(--rn-text-2)]">
+                    short by {formatNumber(alert.shortfall)}
+                  </p>
+                </div>
+                <p className="w-full text-[var(--rn-text-2)] sm:w-auto sm:min-w-[11rem] sm:text-right">
+                  raised {formatRelative(alert.raised_at)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       {lowCount > 0 && !lowOnly ? (
         <div
           role="status"
@@ -61,7 +111,9 @@ export function Stock() {
           <Icon name="alert" className="h-4 w-4 shrink-0 text-amber-500" />
           <p className="flex-1 text-xs text-[var(--rn-text-2)]">
             <strong className="font-semibold text-[var(--rn-text)]">{lowCount}</strong> stock lines
-            are below their safety threshold.
+            are below their safety threshold right now. This is counted from the current
+            quantities, so it includes lines that opened low and never crossed the
+            threshold — which is why it differs from the alert count above.
           </p>
           <Button variant="ghost" size="sm" onClick={() => setLowOnly(true)}>
             Show only these
