@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: resnav-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn.conf.py wsgi:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false          # set to your deployed frontend origin
+      - key: DATABASE_PATH
+        value: /var/data/resource_navigator.db
+      - key: LOG_LEVEL
+        value: INFO
+    disk:
+      # SQLite needs a persistent volume; without one the database is recreated
+      # empty on every deploy and restart.
+      name: resnav-data
+      mountPath: /var/data
+      sizeGB: 1

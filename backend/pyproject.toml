@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+exclude = [".venv", "instance"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM"]
+ignore = [
+    "E501",   # line length is handled by the formatter
+    "B008",   # Flask/pytest decorators legitimately call in defaults
+    "SIM105", # contextlib.suppress is not clearer for one-line best-effort logging
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/ai/*.py" = ["E741", "C4", "SIM", "UP", "B"]  # vendored numeric modules, kept as-is
+"tests/*.py" = ["E402"]

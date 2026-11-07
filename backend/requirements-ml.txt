@@ -1,0 +1,5 @@
+# Optional: transformer-backed semantic search.
+# Only needed when ENABLE_TRANSFORMERS=true. Pulls in torch (~2.5 GB), which
+# does not fit most free deployment tiers — the TF-IDF encoder is the default.
+#   pip install -r requirements.txt -r requirements-ml.txt
+sentence-transformers>=2.2,<6.0

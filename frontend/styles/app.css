@@ -1,0 +1,401 @@
+/* ═══════════════════════════════════════════════════════════
+   ResNav AI — application shell
+   Layout, glassmorphism, navigation and motion.
+   Carried over from the original base.html so the shell looks
+   identical; reorganised, deduplicated and made motion-safe.
+   ═══════════════════════════════════════════════════════════ */
+
+/* `resnav.css` (the design tokens and component classes) is imported first in
+   src/main.jsx, so its custom properties are defined before anything here
+   references them. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ─────────────────────────────────────────────────── */
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--rn-bg);
+  color: var(--rn-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Fluid type: 15px on a phone up to 16px on a desktop, so dense tables stay
+     readable on small screens without a media-query step change. */
+  font-size: clamp(0.9375rem, 0.9rem + 0.15vw, 1rem);
+}
+
+/* Animated mesh background. */
+.mesh-bg {
+  background: linear-gradient(-45deg, #f5f2eb, #ede9e0, #f0ede6, #f5f2eb);
+  background-size: 400% 400%;
+  animation: mesh 22s ease infinite;
+}
+
+.dark .mesh-bg {
+  background: linear-gradient(-45deg, #0f0f0f, #141414, #111111, #0f0f0f);
+  background-size: 400% 400%;
+  animation: mesh 22s ease infinite;
+}
+
+@keyframes mesh {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ── Focus visibility ─────────────────────────────────────────
+   The original had no visible focus ring anywhere; keyboard users
+   could not tell where they were. */
+
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Skip link, revealed on focus. */
+.skip-link {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -120%);
+  z-index: 100;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0 0 10px 10px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: transform var(--transition-fast);
+}
+
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+}
+
+/* ── Layout ───────────────────────────────────────────────── */
+
+.layout-wrapper {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.sidebar-fixed {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  width: 16rem;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-fixed[data-open='true'] {
+  transform: translateX(0);
+}
+
+.main-scroll-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .sidebar-fixed {
+    transform: translateX(0);
+  }
+
+  .main-scroll-area {
+    margin-left: 16rem;
+  }
+}
+
+/* ── Glass surfaces ───────────────────────────────────────── */
+
+.glass-sidebar {
+  background: rgba(253, 252, 249, 0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-right: 1px solid rgba(232, 227, 218, 0.8);
+}
+
+.dark .glass-sidebar {
+  background: rgba(18, 18, 18, 0.95);
+  border-right: 1px solid rgba(60, 60, 60, 0.4);
+}
+
+.glass-header {
+  background: rgba(253, 252, 249, 0.82);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid rgba(232, 227, 218, 0.7);
+}
+
+.dark .glass-header {
+  background: rgba(18, 18, 18, 0.82);
+  border-bottom: 1px solid rgba(60, 60, 60, 0.3);
+}
+
+/* Backdrop-filter is expensive and can wash out text where it is unsupported. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-sidebar {
+    background: var(--rn-surface);
+  }
+
+  .dark .glass-sidebar {
+    background: #121212;
+  }
+
+  .glass-header {
+    background: var(--rn-surface);
+  }
+
+  .dark .glass-header {
+    background: #121212;
+  }
+}
+
+/* ── Navigation ───────────────────────────────────────────── */
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rn-text-2);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.nav-link:hover {
+  background: rgba(107, 101, 96, 0.08);
+  color: var(--rn-text);
+}
+
+.dark .nav-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e8e8;
+}
+
+.nav-link svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity var(--transition-fast);
+}
+
+.nav-link:hover svg,
+.nav-link.nav-link-active svg {
+  opacity: 1;
+}
+
+.nav-link.nav-link-active {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+.dark .nav-link.nav-link-active {
+  background: rgba(99, 102, 241, 0.14);
+  color: #818cf8;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.18);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.34);
+}
+
+/* ── Motion ───────────────────────────────────────────────── */
+
+.page-fade-in {
+  animation: fadeInSlide 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Honour the OS reduced-motion preference. The original animated the mesh
+   background, ticker, pulses and page transitions unconditionally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .mesh-bg,
+  .dark .mesh-bg {
+    animation: none;
+  }
+}
+
+/* ── Ticker ───────────────────────────────────────────────── */
+
+.ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, transparent, #000 4rem, #000 calc(100% - 4rem), transparent);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 4rem,
+    #000 calc(100% - 4rem),
+    transparent
+  );
+}
+
+.ticker-track {
+  display: inline-flex;
+  gap: 3rem;
+  padding-inline: 1.5rem;
+  animation: ticker-scroll 48s linear infinite;
+  will-change: transform;
+}
+
+.ticker:hover .ticker-track,
+.ticker:focus-within .ticker-track {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
+/* ── Skeleton loading ─────────────────────────────────────── */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--rn-border);
+  border-radius: 8px;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+.dark .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}
+
+/* ── Map ──────────────────────────────────────────────────── */
+
+.leaflet-container {
+  background: var(--rn-surface);
+  font-family: inherit;
+  border-radius: var(--radius-card);
+}
+
+.dark .leaflet-container {
+  background: #141414;
+}
+
+/* Dark mode has no dark tile server here, so tiles are filtered instead. */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.7);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--rn-surface);
+  color: var(--rn-text);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Table head ───────────────────────────────────────────────
+   `rn-table-header` in resnav.css is a flex strip for card headers,
+   not a <thead>. Applying it to a table head collapses the columns,
+   so table heads are styled here instead. */
+
+.rn-table thead {
+  background: rgba(107, 101, 96, 0.045);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dark .rn-table thead {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Tables must not force the page to scroll sideways. */
+.rn-table-wrap .rn-table {
+  min-width: max-content;
+}

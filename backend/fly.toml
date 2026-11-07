@@ -1,0 +1,36 @@
+app = "resnav-api"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  PORT = "8000"
+  DATABASE_PATH = "/data/resource_navigator.db"
+  LOG_LEVEL = "INFO"
+
+# SQLite requires a persistent volume. Create it once with:
+#   fly volumes create resnav_data --size 1 --region bom
+[[mounts]]
+  source = "resnav_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # A single machine: SQLite on a local volume cannot be shared across machines.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

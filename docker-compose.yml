@@ -1,0 +1,38 @@
+# Local production-parity stack: the API in a container, the frontend built and
+# served as static files. For day-to-day development use `npm run dev` and
+# `python manage.py run` instead — both give hot reload.
+
+services:
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env or the environment}
+      CORS_ORIGINS: http://localhost:8080
+      DATABASE_PATH: /data/resource_navigator.db
+      LOG_LEVEL: INFO
+    volumes:
+      - resnav-data:/data
+    ports:
+      - '8000:8000'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  web:
+    image: nginx:alpine
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    ports:
+      - '8080:80'
+    restart: unless-stopped
+
+volumes:
+  resnav-data:

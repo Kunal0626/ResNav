@@ -1,0 +1,6 @@
+# Runtime dependencies. Pinned to compatible ranges so a transitive major
+# release cannot break a deploy without a deliberate bump.
+Flask>=3.0,<4.0
+gunicorn>=21.2,<24.0
+numpy>=1.24,<3.0
+scikit-learn>=1.3,<2.0
