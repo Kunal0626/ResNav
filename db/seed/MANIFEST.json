@@ -1,0 +1,13 @@
+{
+  "epoch": "2026-11-01 06:00:00",
+  "providers": 30,
+  "requests": 600,
+  "resources": 45,
+  "seed": 20261107,
+  "service_links": 53,
+  "stock_history_rows": 2345,
+  "stock_rows": 596,
+  "stock_rows_at_zero": 82,
+  "total_units_held": 108150.0,
+  "zones": 12
+}

@@ -49,7 +49,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | **done** — [`MAPPING.md`](docs/MAPPING.md), [`DESIGN.md`](docs/DESIGN.md), [`NORMALIZATION.md`](docs/NORMALIZATION.md) |
 | 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | **done** — `make schema`, 14 SQL tests |
 | 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | **done** |
-| 5 | One deterministic seed, plus a tiny hand-checkable set | not started |
+| 5 | One deterministic seed, plus a tiny hand-checkable set | **done** — `make reset` |
 | 6 | Concurrency proof: oversell, isolation levels, deadlock | not started |
 | 7 | Surface alerts, audit log and "why this centre" in the UI | not started |
 | 8 | Run anywhere: Docker and a no-Docker local path | not started |
@@ -66,6 +66,32 @@ db/          the MySQL layer — schema, triggers, procedures, views, seed,
 docs/        design, audit, and the write-ups each phase produces
 tools/       capabilities.sql (server feature probe), check_mermaid.py
 ```
+
+## The data
+
+`make reset` builds the schema and loads a deterministic seed — same bytes
+every time, from a fixed generator seed, so a number reproduced from this
+README is the same number:
+
+| | |
+|---|---|
+| relief centres | 30, across 21 cities and 16 states |
+| resources | 45 |
+| disaster zones | 12 |
+| stock rows | 596, of which 82 open at zero |
+| total units held | 108,150 |
+| stock movement history | 2,345 rows |
+| open requests | 600 |
+
+Regenerate with `python3 db/seed/generate.py`; `--check` verifies the
+committed files are current. The totals above come from
+[`db/seed/MANIFEST.json`](db/seed/MANIFEST.json), which the generator writes
+from the same data it emits, so they cannot drift.
+
+The tests use a separate, deliberately tiny set — three centres, two
+resources, one zone — documented in
+[`db/tests/EXPECTED.md`](db/tests/EXPECTED.md), where every expected number is
+worked out on paper.
 
 ## Getting started
 
@@ -143,9 +169,9 @@ pretending to succeed.
 
 Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
 
-- **The seed is ResNav's original data, not yet the merged generated set.**
-  18 centres, 5 resources, 5 zones, 29 stock rows. Phase 5 replaces it with a
-  deterministic generator plus a tiny hand-checkable set.
+- **No allocations are pre-seeded.** The 600 requests all start `pending`,
+  because allocating them is what the demo, the tests and the concurrency
+  scripts *do* — a seed that had already run it would hide whether it works.
 - **Running the tests overwrites the development data.** The suite reloads
   the seed before every test, so the tests are isolated from each other, but
   by default they share the development database. `./run.sh test` reloads the

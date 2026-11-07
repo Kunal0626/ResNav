@@ -228,6 +228,41 @@ def providers_holding_resource(resource_id: int, conn: Conn = None) -> list[dict
     """, (resource_id,), conn))
 
 
+def candidates_for_request(request_id: int, conn: Conn = None) -> list[dict[str, Any]]:
+    """Centres that could supply a request, in the order the allocator will
+    actually draw from them.
+
+    The ORDER BY here is character-for-character the one inside
+    sp_allocate_request. That is deliberate: the preview the UI shows and the
+    dispatch the database performs must agree, and the only way to guarantee
+    that is for both to use one definition of "nearest". Ranking the preview
+    in Python by a different formula -- which is what happened when the
+    allocation first moved into the procedure -- produces a plan that names
+    providers the dispatch will not use.
+
+    Reliability still comes along, because the UI explains its reasoning with
+    it, but it no longer decides the order.
+    """
+    return query_all("""
+        SELECT p.id, p.name, p.city, p.state, p.latitude, p.longitude,
+               sl.quantity AS stock_level,
+               ROUND(fn_haversine_km(z.latitude, z.longitude,
+                                     p.latitude, p.longitude), 2) AS distance_km,
+               rel.total_allocations,
+               rel.successful_allocations,
+               rel.reliability
+        FROM Requests rq
+        JOIN Zones z              ON z.id = rq.zone_id
+        JOIN StockLevels sl       ON sl.resource_id = rq.resource_id
+        JOIN Providers p          ON p.id = sl.provider_id
+        JOIN v_provider_reliability rel ON rel.provider_id = p.id
+        WHERE rq.id = %s AND sl.quantity > 0
+        ORDER BY fn_haversine_km(z.latitude, z.longitude, p.latitude, p.longitude) ASC,
+                 sl.quantity DESC,
+                 sl.provider_id ASC
+    """, (request_id,), conn)
+
+
 def get_stock_row(provider_id: int, resource_id: int, conn: Conn = None) -> dict[str, Any] | None:
     row = query_one(
         "SELECT id, quantity, low_stock_threshold FROM StockLevels "

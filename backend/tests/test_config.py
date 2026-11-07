@@ -99,13 +99,27 @@ def test_connection_uses_the_app_settings_not_a_cached_global(app, settings):
     assert _active_settings().database.database == os.environ.get("DRA_MYSQL_DB", "resnav")
 
 
-def test_the_suite_does_not_depend_on_run_order(client, reference):
+def test_the_suite_does_not_depend_on_run_order(client):
     """The seed is reloaded before every test, so the data each test sees is
     identical no matter what ran before it. The old suite could not say this:
-    it drained shared stock until the third consecutive run failed."""
+    it drained shared stock until the third consecutive run failed.
+
+    The expected totals come from db/seed/MANIFEST.json, which the generator
+    writes from the same data it emits -- so this cannot drift when the seed
+    is regenerated, and it still fails loudly if a previous test's writes
+    leak into this one."""
+    import json
+    from pathlib import Path
+
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[2] / "db" / "seed" / "MANIFEST.json").read_text())
+
     stock = client.get("/api/stock").get_json()["stock"]
-    total = sum(row["quantity"] for row in stock)
-    assert total == 2505, (
-        "the seeded total changed, which means a previous test's writes "
+    assert len(stock) == manifest["stock_rows"]
+    assert sum(row["quantity"] for row in stock) == manifest["total_units_held"], (
+        "the seeded stock total changed, which means a previous test's writes "
         "survived into this one"
     )
+
+    requests = client.get("/api/requests").get_json()["requests"]
+    assert len(requests) <= manifest["requests"]

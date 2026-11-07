@@ -9,6 +9,7 @@ recommend a plan, then commit it atomically.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from pymysql.err import MySQLError
@@ -28,24 +29,32 @@ FULL_COVERAGE_EPSILON = 0.001
 
 def _score_provider(provider: dict[str, Any], *, quantity: float, urgency: float,
                     zone_state: str | None) -> dict[str, Any]:
-    """Rank a candidate supplier for one request.
+    """Describe a candidate supplier.
 
-    Coverage is how much of the request they can meet; reliability is their
-    historical fulfilment rate; locality rewards same-state providers.
+    This explains a choice; it no longer makes one. The order comes from
+    queries.candidates_for_request, which sorts by the same haversine
+    expression sp_allocate_request uses, so the preview and the dispatch
+    cannot disagree about who supplies what.
 
-    Zones carry no coordinates in the schema, so proximity is approximated by
-    state match rather than the previous code's distance-from-Delhi, which
-    scored every provider against a fixed point unrelated to the request.
+    Zones now carry coordinates, so `locality` is a real distance decay
+    rather than the same-state boolean it had to be before -- and the
+    previous code's distance-from-Delhi, which scored every provider against
+    a fixed point unrelated to the request, is long gone.
     """
     stock = float(provider.get("stock_level") or 0.0)
     total = int(provider.get("total_allocations") or 0)
     successful = int(provider.get("successful_allocations") or 0)
+    distance_km = provider.get("distance_km")
 
     coverage = min(1.0, stock / max(quantity, 1.0))
     # No history yet is treated as neutral-positive rather than a zero, so new
     # providers are not permanently buried below established ones.
-    reliability = (successful / total) if total > 0 else 0.7
-    locality = 1.0 if zone_state and provider.get("state") == zone_state else 0.4
+    reliability = float(provider.get("reliability") or ((successful / total) if total else 0.7))
+    if distance_km is None:
+        locality = 1.0 if zone_state and provider.get("state") == zone_state else 0.4
+    else:
+        # Exponential decay: same city ~1.0, 200 km ~0.6, 1500 km ~0.1.
+        locality = round(math.exp(-float(distance_km) / 650.0), 4)
     urgency_weight = min(1.0, urgency / 3.0)
 
     score = (
@@ -56,6 +65,8 @@ def _score_provider(provider: dict[str, Any], *, quantity: float, urgency: float
     )
 
     reasons = []
+    if distance_km is not None:
+        reasons.append(f"{float(distance_km):,.0f} km away")
     if coverage >= 1.0:
         reasons.append("can fulfil in full")
     elif coverage > 0.5:
@@ -72,6 +83,7 @@ def _score_provider(provider: dict[str, Any], *, quantity: float, urgency: float
         "provider_name": provider["name"],
         "provider_city": provider.get("city"),
         "provider_stock": round(stock, 2),
+        "distance_km": float(distance_km) if distance_km is not None else None,
         "coverage": round(coverage, 3),
         "reliability": round(reliability, 3),
         "score": round(score, 4),
@@ -100,7 +112,8 @@ def recommend(request_id: int) -> dict[str, Any]:
     zone_row = next((z for z in queries.list_zones() if z["id"] == request["zone_id"]), None)
     zone_state = zone_row.get("state") if zone_row else None
 
-    candidates = queries.providers_holding_resource(request["resource_id"])
+    # Ordered by the database, using the same expression the allocator uses.
+    candidates = queries.candidates_for_request(request_id)
     if not candidates:
         return {
             "request_id": request_id,
@@ -115,12 +128,14 @@ def recommend(request_id: int) -> dict[str, Any]:
             "message": f"No provider currently holds stock of '{request['resource']}'.",
         }
 
-    scored = sorted(
-        (_score_provider(c, quantity=outstanding, urgency=float(request["urgency"]),
-                         zone_state=zone_state) for c in candidates),
-        key=lambda s: s["score"],
-        reverse=True,
-    )
+    # NOT re-sorted. The database already returned them nearest-first, which
+    # is the order sp_allocate_request will draw in; sorting by score here
+    # would produce a plan that names providers the dispatch will not use.
+    scored = [
+        _score_provider(c, quantity=outstanding, urgency=float(request["urgency"]),
+                        zone_state=zone_state)
+        for c in candidates
+    ]
 
     total_available = sum(s["provider_stock"] for s in scored)
     best = scored[0]
