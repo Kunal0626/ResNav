@@ -7,7 +7,7 @@
 INSERT INTO Requests (id, zone_id, resource_id, quantity_requested, severity, urgency)
 VALUES (920, 1, 1, 45.000, 2.0, 2.0);
 
-CALL sp_allocate_request(920, @alloc, @legs, @st);
+CALL sp_allocate_request(920, 0, @alloc, @legs, @st);
 
 SELECT 'allocated' AS check_name, @alloc;
 SELECT 'legs'      AS check_name, @legs;

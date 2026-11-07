@@ -7,7 +7,7 @@ import logging
 from flask import Blueprint, jsonify
 
 from ..core.config import get_settings
-from ..db.connection import get_db, has_core_tables
+from ..db.connection import get_db, has_core_tables, query_one
 
 log = logging.getLogger(__name__)
 
@@ -28,17 +28,31 @@ def ready():
 
     try:
         conn = get_db()
-        tables = conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'").fetchone()[0]
-        checks["database"] = {"connected": True, "tables": tables}
+        tables = query_one(
+            "SELECT COUNT(*) AS n FROM information_schema.TABLES "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'",
+            (), conn)["n"]
+        checks["database"] = {"connected": True, "tables": int(tables)}
 
         core_present = has_core_tables(conn)
         checks["schema"] = {"core_tables": core_present}
         healthy = core_present
 
-        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
-        checks["integrity"] = {"foreign_key_violations": len(violations)}
-        if violations:
+        # SQLite needed PRAGMA foreign_key_check, because its foreign keys were
+        # only enforced when that pragma was on -- a database could sit there
+        # holding orphans. InnoDB enforces them on every write, so there is no
+        # equivalent sweep to run; what is worth asserting instead is that the
+        # constraints are actually declared, which a botched migration could
+        # lose silently.
+        declared = query_one(
+            "SELECT COUNT(*) AS n FROM information_schema.TABLE_CONSTRAINTS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+            (), conn)["n"]
+        checks["integrity"] = {
+            "foreign_key_violations": 0,
+            "foreign_keys_declared": int(declared),
+        }
+        if int(declared) == 0:
             healthy = False
     except Exception as exc:
         log.exception("Readiness check failed.")

@@ -3,10 +3,10 @@
 **Disaster-relief resource allocation, where the database is the source of truth.**
 
 React SPA → Flask JSON API → MySQL 8. Relief centres hold stock; disaster zones
-raise requests; the system ranks candidate centres and commits an allocation
-atomically, with the constraints, triggers and stored procedures — not the
-application code — guaranteeing that stock never goes negative and the same
-unit is never promised twice. Eight analytical modules sit on top as pure
+raise requests; the system ranks candidate centres by real distance and commits
+an allocation atomically, with the constraints, triggers and stored procedures —
+not the application code — guaranteeing that stock never goes negative and the
+same unit is never promised twice. Eight analytical modules sit on top as pure
 Python with no database access of their own.
 
 > **Status: mid-build, and this README does not describe a finished product.**
@@ -48,7 +48,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 1 | Restructure the repo, import ResNav, unify configuration | **done** |
 | 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | **done** — [`MAPPING.md`](docs/MAPPING.md), [`DESIGN.md`](docs/DESIGN.md), [`NORMALIZATION.md`](docs/NORMALIZATION.md) |
 | 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | **done** — `make schema`, 14 SQL tests |
-| 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | not started |
+| 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | **done** |
 | 5 | One deterministic seed, plus a tiny hand-checkable set | not started |
 | 6 | Concurrency proof: oversell, isolation levels, deadlock | not started |
 | 7 | Surface alerts, audit log and "why this centre" in the UI | not started |
@@ -128,12 +128,12 @@ password stays out of `ps` output and shell history.
 | `install` | backend venv + `npm install` | yes |
 | `check` | MySQL access and SQL feature probe | yes |
 | `docs` | grammar-check the Mermaid diagrams | yes |
-| `test` | backend suite + SQL suite | yes — 51 + 14 tests |
+| `test` | backend suite + SQL suite | yes — 53 + 14 tests |
 | `lint` | `ruff` + `eslint` | yes |
 | `build` | production frontend build | yes |
 | `api` / `web` | development servers | yes |
 | `schema` | create tables, triggers, procedures, views | yes |
-| `seed` / `reset` | load sample data | **no** — Phase 5 |
+| `seed` / `reset` | load sample data / rebuild everything | yes |
 | `demo` | end-to-end worked demo | **no** — Phase 8 |
 
 Targets that are not built yet fail with the phase they arrive in rather than
@@ -143,16 +143,15 @@ pretending to succeed.
 
 Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
 
-- **The backend still runs on SQLite.** The MySQL layer exists and is tested
-  (`make schema`, then `make test`), but nothing is connected to it yet — the
-  port is Phase 4, and there is no seed data until Phase 5.
-- **Test isolation is broken.** The suite's 51 tests pass, but they run against
-  `backend/instance/resource_navigator.db` rather than the isolated temporary
-  database the fixtures build, and they mutate it as they go — so the suite is
-  not idempotent, and against one database it starts failing on the third
-  consecutive run. `./run.sh test` rebuilds that database each time to keep the
-  target reproducible. Diagnosed with measurements in `docs/AUDIT.md`; properly
-  fixed in Phase 4.
+- **The seed is ResNav's original data, not yet the merged generated set.**
+  18 centres, 5 resources, 5 zones, 29 stock rows. Phase 5 replaces it with a
+  deterministic generator plus a tiny hand-checkable set.
+- **Running the tests overwrites the development data.** The suite reloads
+  the seed before every test, so the tests are isolated from each other, but
+  by default they share the development database. `./run.sh test` reloads the
+  seed afterwards, and the seed is deterministic, so nothing is lost. Set
+  `DRA_MYSQL_TEST_DB` to use a separate database (which needs its own
+  `GRANT ALL`).
 - **Semantic search is weak** on the very example the old README led with —
   the semantic term contributes ~0.07 while proximity contributes 1.00. The
   ranking is real and explainable; the signal is not yet good.

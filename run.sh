@@ -330,30 +330,12 @@ target_web() {
 
 target_test() {
   load_env; need_venv
-  # The suite still runs against SQLite; Phase 4 ports it to MySQL and this
-  # target grows the SQL tests in Phase 3.
-  #
-  # Rebuilding the database below is a WORKAROUND for a real defect, not
-  # housekeeping.
-  #
-  # tests/conftest.py builds an isolated temporary database per test, but
-  # db/connection.py:connect() resolves its path from the lru_cached GLOBAL
-  # get_settings(), not from the Settings the test injected into create_app.
-  # So every request opens backend/instance/resource_navigator.db instead --
-  # the developer's real database -- and the tests mutate it as they run.
-  #
-  # The suite is therefore NOT idempotent. Measured: against one database it
-  # passes twice, then fails from the third run onward, because allocation
-  # tests drain stock (2505 -> 2460 -> 2430 units) until the partial-
-  # fulfilment test can no longer get a partial result. Deleting and
-  # re-seeding makes the target reproducible; it does not fix the bug.
-  #
-  # See docs/AUDIT.md "Broken test isolation". Fixed properly in Phase 4.
-  echo "==> rebuilding backend/instance (see docs/AUDIT.md: broken test isolation)"
-  rm -rf backend/instance
-  ( cd backend && "$PY" manage.py seed >/dev/null )
-  echo "==> backend test suite"
-  ( cd backend && "$PY" -m pytest -q )
+  echo "==> backend test suite (against MySQL)"
+  # No database rebuild workaround here any more. The suite reloads
+  # db/seed/*.sql before every test, so no test can see another's writes --
+  # the defect recorded in docs/AUDIT.md is fixed rather than worked around,
+  # and tests/test_config.py asserts it.
+  ( cd backend && "$PY" -m pytest -q ) || return 1
 
   echo
   echo "==> SQL test suite"
@@ -361,10 +343,19 @@ target_test() {
   # 0600 defaults file, and its path is all that is handed over. One place in
   # the repo deals with credentials.
   connect
+  local status=0
   RESNAV_MYSQL_BIN="$MYSQL_BIN" \
   RESNAV_MYSQL_DEFAULTS_FILE="$DEFAULTS_FILE" \
   RESNAV_MYSQL_DB="$DRA_MYSQL_DB" \
-    python3 -I db/tests/runner.py "$@"
+    python3 -I db/tests/runner.py "$@" || status=$?
+
+  # Both suites leave the database holding their own last writes. Reloading
+  # the seed means `make test` is also the way back to a known-good state.
+  echo
+  echo "==> restoring the seed"
+  local f
+  for f in db/seed/*.sql; do mysql_db < "$f"; done
+  return $status
 }
 
 target_lint() {
@@ -412,8 +403,26 @@ target_schema() {
     UNION ALL SELECT 'foreign keys', COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE='FOREIGN KEY'
     UNION ALL SELECT 'check constraints', COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE='CHECK';"
 }
-target_seed()   { not_yet seed 5; }
-target_reset()  { not_yet reset 5; }
+target_seed() {
+  connect
+  local f
+  for f in db/seed/*.sql; do
+    [[ -e "$f" ]] || { echo "error: no seed files in db/seed/" >&2; return 1; }
+    printf '  loading %s\n' "$f"
+    mysql_db < "$f" || return 1
+  done
+  mysql_db --table -e "
+    SELECT 'providers' AS entity, COUNT(*) AS n FROM Providers
+    UNION ALL SELECT 'resources',  COUNT(*) FROM Resources
+    UNION ALL SELECT 'zones',      COUNT(*) FROM Zones
+    UNION ALL SELECT 'stock rows', COUNT(*) FROM StockLevels
+    UNION ALL SELECT 'requests',   COUNT(*) FROM Requests;"
+}
+# Rebuild from nothing: schema, then data. The schema files drop before they
+# create, so this needs no DROP DATABASE and no extra privilege.
+target_reset() {
+  target_schema && echo && target_seed
+}
 target_demo()   { not_yet demo 8; }
 
 usage() {

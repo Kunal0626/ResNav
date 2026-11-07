@@ -2,7 +2,7 @@
 -- 'released' rather than deleting them.
 INSERT INTO Requests (id, zone_id, resource_id, quantity_requested, severity, urgency)
 VALUES (921, 1, 1, 45.000, 2.0, 2.0);
-CALL sp_allocate_request(921, @a, @l, @s);
+CALL sp_allocate_request(921, 0, @a, @l, @s);
 CALL sp_cancel_request(921, @released, @rlegs);
 
 SELECT 'released_units' AS check_name, @released;

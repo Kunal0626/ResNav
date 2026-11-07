@@ -11,9 +11,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pymysql.err import MySQLError
+
 from ..core.errors import ConflictError, NotFoundError, ValidationError
 from ..db import queries
-from ..db.connection import get_db, transaction
+from ..db.connection import call_proc, query_one, transaction
 
 log = logging.getLogger(__name__)
 
@@ -168,11 +170,31 @@ def recommend(request_id: int) -> dict[str, Any]:
 
 
 def execute(request_id: int, plan: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Commit an allocation plan: deduct stock, record allocations, update status.
+    """Commit an allocation by calling sp_allocate_request.
 
-    Everything runs inside one transaction. A shortfall on any leg rolls the
-    whole allocation back rather than leaving stock deducted with no matching
-    Allocations row.
+    This function used to do the work itself: loop over the plan, deduct
+    stock with a conditional UPDATE, insert the allocation rows, write the
+    history and move the request status -- all from Python, inside one
+    transaction. On SQLite that was safe, but only by accident: BEGIN
+    IMMEDIATE takes a database-wide write lock, so there was never a second
+    writer to race with.
+
+    InnoDB has row-level locking and many concurrent writers, so the gap
+    between `recommend()` reading the balances and `execute()` acting on them
+    is a real race: two sessions can both read the same stock and both commit
+    against it. Keeping the Python loop and merely changing the driver would
+    have introduced an oversell bug that SQLite had been hiding.
+
+    So the decision moved into the database. sp_allocate_request takes every
+    lock it needs up front in primary-key order, re-reads the quantities
+    AFTER holding them, and only then allocates -- nearest centre first, by
+    real haversine distance. Phase 6 demonstrates the race against a
+    deliberately unlocked variant.
+
+    The `plan` argument is accepted and ignored for allocation purposes: the
+    database now chooses the suppliers, because choosing them in Python means
+    choosing them from stale numbers. It is still validated, so a caller
+    asking for more than is outstanding gets the same error it always did.
     """
     request = queries.get_request(request_id)
     if not request:
@@ -180,65 +202,115 @@ def execute(request_id: int, plan: list[dict[str, Any]] | None = None) -> dict[s
     if request["status"] in ("fulfilled", "rejected"):
         raise ConflictError(f"Request {request_id} is already {request['status']}.")
 
-    if plan is None:
-        recommendation = recommend(request_id)
-        plan = recommendation["providers"]
-        if not plan:
-            raise ConflictError(recommendation.get("message", "No allocation is possible."))
-
-    resource_id = request["resource_id"]
     outstanding = float(request["quantity_requested"]) - float(request["quantity_allocated"])
-    requested_total = sum(float(leg["allocate_qty"]) for leg in plan)
-    if requested_total <= 0:
-        raise ValidationError("Allocation plan must move a positive quantity.")
-    if requested_total > outstanding + FULL_COVERAGE_EPSILON:
-        raise ValidationError(
-            f"Plan allocates {requested_total} but only {round(outstanding, 2)} is outstanding.")
 
-    allocated_ids: list[int] = []
-    with transaction() as conn:
-        for leg in plan:
-            provider_id = int(leg["provider_id"])
-            quantity = float(leg["allocate_qty"])
-            if quantity <= 0:
-                continue
+    # A caller may cap HOW MUCH is dispatched -- the API has always allowed
+    # a partial dispatch -- but no longer chooses WHICH centres supply it.
+    # Picking suppliers in the client means picking them from quantities read
+    # before any lock was taken, which is exactly the race described above.
+    cap = 0.0
+    if plan:
+        cap = sum(float(leg.get("allocate_qty") or 0) for leg in plan)
+        if cap <= 0:
+            raise ValidationError("Allocation plan must move a positive quantity.")
+        if cap > outstanding + FULL_COVERAGE_EPSILON:
+            raise ValidationError(
+                f"Plan allocates {cap} but only {round(outstanding, 2)} is outstanding.")
 
-            before = queries.get_stock_row(provider_id, resource_id, conn)
-            if before is None:
-                raise ConflictError(
-                    f"Provider {provider_id} holds no stock record for this resource.")
+    try:
+        # The procedure runs its own transaction and COMMITs, so there is no
+        # outer transaction() here -- wrapping it would be a lie.
+        out = call_proc(
+            "sp_allocate_request",
+            (request_id, cap),
+            ("@allocated", "@legs", "@status"),
+        )
+    except MySQLError as exc:
+        raise _translate(exc) from None
 
-            try:
-                queries.deduct_stock(provider_id, resource_id, quantity, conn)
-            except ValueError:
-                raise ConflictError(
-                    f"{leg.get('provider_name', f'Provider {provider_id}')} no longer has "
-                    f"{quantity} units available."
-                ) from None
+    allocated = float(out.get("allocated") or 0)
+    if allocated <= 0:
+        raise ConflictError(
+            f"No provider currently holds stock of '{request['resource']}'.")
 
-            allocated_ids.append(
-                queries.insert_allocation(request_id, provider_id, resource_id, quantity, conn))
-            queries.insert_stock_history(
-                provider_id, resource_id,
-                before["quantity"], before["quantity"] - quantity,
-                "allocation", f"request #{request_id}", conn)
+    updated = queries.get_request(request_id)
+    allocation_ids = [row["id"] for row in queries.allocations_for_request(request_id)]
 
-        total_after = float(request["quantity_allocated"]) + requested_total
-        status = "fulfilled" if total_after >= float(request["quantity_requested"]) - FULL_COVERAGE_EPSILON else "allocated"
-        queries.set_request_status(request_id, status, conn)
-        queries.log_audit("allocation", "Allocations", request_id,
-                          previous_value=request["status"], new_value=status,
-                          details=f"{requested_total} units across {len(plan)} provider(s)",
-                          conn=conn)
-
-    log.info("Allocated %.2f units for request %s (%s).", requested_total, request_id, status)
+    log.info("Allocated %.2f units for request %s (%s).",
+             allocated, request_id, updated["status"])
     return {
         "request_id": request_id,
-        "status": status,
-        "allocated": round(requested_total, 2),
-        "allocation_ids": allocated_ids,
+        "status": updated["status"],
+        "allocated": round(allocated, 2),
+        "allocation_ids": allocation_ids,
+        "request": updated,
+    }
+
+
+def cancel(request_id: int) -> dict[str, Any]:
+    """Release every active allocation and return the stock, atomically."""
+    if not queries.get_request(request_id):
+        raise NotFoundError(f"Request {request_id} does not exist.")
+    try:
+        out = call_proc("sp_cancel_request", (request_id,), ("@released", "@legs"))
+    except MySQLError as exc:
+        raise _translate(exc) from None
+    return {
+        "request_id": request_id,
+        "released": float(out.get("released") or 0),
+        "legs": int(out.get("legs") or 0),
         "request": queries.get_request(request_id),
     }
+
+
+def restock(provider_id: int, resource_id: int, quantity: float) -> dict[str, Any]:
+    """Add stock to a centre."""
+    try:
+        out = call_proc("sp_restock_center",
+                        (provider_id, resource_id, quantity), ("@new_total",))
+    except MySQLError as exc:
+        raise _translate(exc) from None
+    return {
+        "provider_id": provider_id,
+        "resource_id": resource_id,
+        "new_total": float(out.get("new_total") or 0),
+    }
+
+
+# The guards raise SIGNAL SQLSTATE '45000' with a machine-readable prefix
+# ("insufficient_stock: ..."), so the API can keep returning the same error
+# codes it always did instead of leaking SQL text to the browser.
+_SIGNAL_TO_ERROR: dict[str, type[Exception]] = {
+    "stock_negative": ConflictError,
+    "insufficient_stock": ConflictError,
+    "no_stock_row": ConflictError,
+    "request_closed": ConflictError,
+    "already_cancelled": ConflictError,
+    "over_allocation": ValidationError,
+    "bad_quantity": ValidationError,
+    "not_found": NotFoundError,
+}
+
+
+def _translate(exc: Exception) -> Exception:
+    """Turn a database error into the API's own error vocabulary.
+
+    MySQL errno 1644 is a user-raised SIGNAL -- one of our guards. Anything
+    else is a genuine database fault and is re-raised untouched so it is
+    logged with a traceback rather than shown to a user as a 409.
+    """
+    errno = exc.args[0] if exc.args else None
+    message = str(exc.args[1]) if len(exc.args) > 1 else str(exc)
+
+    if errno == 1644:
+        tag, _, detail = message.partition(":")
+        factory = _SIGNAL_TO_ERROR.get(tag.strip())
+        if factory is not None:
+            return factory(detail.strip() or message)
+        return ConflictError(message)
+    if errno == 3819:  # CHECK constraint violated
+        return ValidationError(f"The database rejected that value: {message}")
+    return exc
 
 
 def create_request(*, zone_id: int, resource_id: int, quantity: float, severity: float,
@@ -248,20 +320,21 @@ def create_request(*, zone_id: int, resource_id: int, quantity: float, severity:
     priority = severity × population × urgency ÷ current total stock — scarce
     resources for large, severe incidents rise to the top of the queue.
     """
-    conn = get_db()
-    if not queries.query_one("SELECT 1 FROM Zones WHERE id = ?", (zone_id,), conn):
+    if not query_one("SELECT 1 AS ok FROM Zones WHERE id = %s", (zone_id,)):
         raise ValidationError("Unknown zone.", details={"field": "zone_id"})
-    if not queries.query_one("SELECT 1 FROM Resources WHERE id = ?", (resource_id,), conn):
+    if not query_one("SELECT 1 AS ok FROM Resources WHERE id = %s", (resource_id,)):
         raise ValidationError("Unknown resource.", details={"field": "resource_id"})
 
-    total_stock = queries.query_one(
-        "SELECT COALESCE(SUM(quantity), 0) AS total FROM StockLevels WHERE resource_id = ?",
-        (resource_id,), conn)["total"]
-    priority = round((severity * max(population_affected, 1) * urgency) / max(1.0, float(total_stock)), 4)
+    total_stock = query_one(
+        "SELECT COALESCE(SUM(quantity), 0) AS total FROM StockLevels WHERE resource_id = %s",
+        (resource_id,))["total"]
+    priority = round(
+        (severity * max(population_affected, 1) * urgency) / max(1.0, float(total_stock)), 4)
 
-    with transaction(conn):
+    with transaction() as conn:
         request_id = queries.insert_request(
-            zone_id, resource_id, quantity, severity, urgency, population_affected, priority, conn)
+            zone_id, resource_id, quantity, severity, urgency, population_affected,
+            priority, conn)
         queries.log_audit("request_create", "Requests", request_id,
                           new_value=f"{quantity} units", details="request created", conn=conn)
 

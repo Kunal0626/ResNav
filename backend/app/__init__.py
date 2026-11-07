@@ -47,7 +47,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     if not settings.testing:
         from .db.bootstrap import ensure_database
 
-        ensure_database(settings.database_path)
+        ensure_database(settings.database)
 
     @app.get("/")
     def root():

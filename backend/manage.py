@@ -17,8 +17,8 @@ log = logging.getLogger("manage")
 
 def cmd_seed(_args: argparse.Namespace) -> int:
     settings = get_settings()
-    ensure_database(settings.database_path)
-    print(f"Database ready at {settings.database_path}")
+    ensure_database(settings.database)
+    print(f"Database ready at {settings.database.dsn_for_log()}")
     return 0
 
 

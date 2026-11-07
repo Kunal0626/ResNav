@@ -10,9 +10,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parents[2]
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -32,13 +29,33 @@ class ConfigError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class DatabaseSettings:
+    """Where the MySQL server is and how to reach it.
+
+    A nested dataclass rather than five loose fields on Settings, so a test
+    can swap the whole database target in one assignment -- which is what
+    makes per-test isolation possible at all.
+    """
+
+    host: str = "127.0.0.1"
+    port: int = 3306
+    user: str = "resnav_app"
+    password: str = ""
+    database: str = "resnav"
+
+    def dsn_for_log(self) -> str:
+        """Safe to log: identifies the target, never the password."""
+        return f"{self.user}@{self.host}:{self.port}/{self.database}"
+
+
+@dataclass(frozen=True)
 class Settings:
     env: str = "development"
     debug: bool = True
     testing: bool = False
 
     secret_key: str = "dev-only-insecure-secret"
-    database_path: Path = BASE_DIR / "instance" / "resource_navigator.db"
+    database: DatabaseSettings = field(default_factory=DatabaseSettings)
 
     # Ranking / search tuning.
     geo_scale_km: float = 10.0
@@ -71,7 +88,6 @@ def _build() -> Settings:
             "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(48))'"
         )
 
-    db_path = os.environ.get("DATABASE_PATH")
     default_origins = "" if is_prod else "http://localhost:5173,http://127.0.0.1:5173"
     origins = _env_list("CORS_ORIGINS", default_origins)
     if is_prod and not origins:
@@ -80,12 +96,24 @@ def _build() -> Settings:
             "e.g. CORS_ORIGINS=https://resnav.vercel.app"
         )
 
+    if is_prod and not os.environ.get("DRA_MYSQL_PASSWORD"):
+        raise ConfigError(
+            "DRA_MYSQL_PASSWORD must be set when APP_ENV=production."
+        )
+
     return Settings(
         env=env,
         debug=_env_bool("DEBUG", not is_prod),
         testing=_env_bool("TESTING", False),
         secret_key=secret_key or "dev-only-insecure-secret",
-        database_path=Path(db_path) if db_path else BASE_DIR / "instance" / "resource_navigator.db",
+        database=DatabaseSettings(
+            # DRA_MYSQL_* are what run.sh exports from the one root .env.
+            host=os.environ.get("DRA_MYSQL_HOST", "127.0.0.1"),
+            port=int(os.environ.get("DRA_MYSQL_PORT", "3306")),
+            user=os.environ.get("DRA_MYSQL_USER", "resnav_app"),
+            password=os.environ.get("DRA_MYSQL_PASSWORD", ""),
+            database=os.environ.get("DRA_MYSQL_DB", "resnav"),
+        ),
         geo_scale_km=float(os.environ.get("GEO_SCALE_KM", "10.0")),
         max_results=int(os.environ.get("MAX_RESULTS", "15")),
         google_maps_api_key=os.environ.get("GOOGLE_MAPS_API_KEY", ""),

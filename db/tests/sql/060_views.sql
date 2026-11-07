@@ -2,7 +2,7 @@
 -- base tables do.
 INSERT INTO Requests (id, zone_id, resource_id, quantity_requested, severity, urgency)
 VALUES (930, 1, 1, 45.000, 2.0, 2.0);
-CALL sp_allocate_request(930, @a, @l, @s);
+CALL sp_allocate_request(930, 0, @a, @l, @s);
 
 SELECT 'stock_summary' AS check_name, provider_name, quantity, is_low
   FROM v_center_stock_summary WHERE resource_id = 1 ORDER BY provider_id;

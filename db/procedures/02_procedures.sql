@@ -48,6 +48,12 @@ DELIMITER $$
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE PROCEDURE sp_allocate_request(
     IN  p_request_id   BIGINT UNSIGNED,
+    -- Optional cap. 0 or NULL means "everything still outstanding". A caller
+    -- may limit HOW MUCH is dispatched -- the API has always allowed that --
+    -- but not WHICH centres supply it: choosing suppliers in the client means
+    -- choosing them from numbers read before any lock was held, which is the
+    -- oversell bug this procedure exists to prevent.
+    IN  p_max_quantity DECIMAL(12,3),
     OUT p_allocated    DECIMAL(12,3),
     OUT p_legs         INT,
     OUT p_status       VARCHAR(16)
@@ -129,6 +135,10 @@ BEGIN
 
     SET v_outstanding = v_requested - v_already;
 
+    IF p_max_quantity IS NOT NULL AND p_max_quantity > 0 THEN
+        SET v_outstanding = LEAST(v_outstanding, p_max_quantity);
+    END IF;
+
     IF v_outstanding > 0 THEN
         OPEN cur_lock;
         lock_loop: LOOP
@@ -202,7 +212,7 @@ BEGIN
         IF v_done = 1 OR (p_limit > 0 AND p_processed >= p_limit) THEN
             LEAVE queue_loop;
         END IF;
-        CALL sp_allocate_request(v_id, v_allocated, v_legs, v_status);
+        CALL sp_allocate_request(v_id, 0, v_allocated, v_legs, v_status);
         SET p_processed = p_processed + 1;
     END LOOP;
     CLOSE cur_queue;

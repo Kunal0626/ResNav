@@ -8,12 +8,17 @@ list for every category regardless of input.
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
-from .connection import get_db, query_all, query_one, rows_to_dicts
+from .connection import (
+    execute,
+    execute_returning_id,
+    query_all,
+    query_one,
+    rows_to_dicts,
+)
 
-Conn = sqlite3.Connection | None
+Conn = Any
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -57,7 +62,8 @@ def load_providers_for_search(conn: Conn = None) -> list[dict[str, Any]]:
     return rows_to_dicts(query_all("""
         SELECT p.id, p.name, p.description, p.phone, p.operating_hours, p.is_24_7,
                p.latitude, p.longitude, p.address, p.city, p.state,
-               COALESCE(GROUP_CONCAT(c.name || ': ' || COALESCE(s.details, '')), '') AS services_text
+               COALESCE(GROUP_CONCAT(CONCAT(c.name, ': ', COALESCE(s.details, ''))
+                      SEPARATOR ', '), '') AS services_text
         FROM Providers p
         LEFT JOIN ServicesOffered s ON s.provider_id = p.id
         LEFT JOIN ServiceCategory c ON s.category_id = c.id
@@ -110,7 +116,7 @@ def recent_allocations(limit: int = 5, conn: Conn = None) -> list[dict[str, Any]
         JOIN Resources res ON a.resource_id = res.id
         JOIN Providers p  ON a.provider_id = p.id
         ORDER BY a.allocated_at DESC, a.id DESC
-        LIMIT ?
+        LIMIT %s
     """, (limit,), conn))
 
 
@@ -122,7 +128,7 @@ def recent_requests(limit: int = 5, conn: Conn = None) -> list[dict[str, Any]]:
         JOIN Zones z       ON rq.zone_id = z.id
         JOIN Resources res ON rq.resource_id = res.id
         ORDER BY rq.created_at DESC, rq.id DESC
-        LIMIT ?
+        LIMIT %s
     """, (limit,), conn))
 
 
@@ -161,9 +167,9 @@ def list_requests(conn: Conn = None, *, status: str | None = None, limit: int = 
     """
     params: list[Any] = []
     if status:
-        sql += " WHERE rq.status = ?"
+        sql += " WHERE rq.status = %s"
         params.append(status)
-    sql += " ORDER BY rq.priority_score DESC NULLS LAST, rq.created_at DESC LIMIT ?"
+    sql += " ORDER BY rq.priority_score IS NULL, rq.priority_score DESC, rq.created_at DESC LIMIT %s"
     params.append(limit)
     return rows_to_dicts(query_all(sql, params, conn))
 
@@ -178,7 +184,7 @@ def get_request(request_id: int, conn: Conn = None) -> dict[str, Any] | None:
         FROM Requests rq
         JOIN Zones z       ON rq.zone_id = z.id
         JOIN Resources res ON rq.resource_id = res.id
-        WHERE rq.id = ?
+        WHERE rq.id = %s
     """, (request_id,), conn)
     return dict(row) if row else None
 
@@ -195,7 +201,7 @@ def list_allocations(conn: Conn = None, limit: int = 100) -> list[dict[str, Any]
         JOIN Requests rq   ON a.request_id = rq.id
         JOIN Zones z       ON rq.zone_id = z.id
         ORDER BY a.allocated_at DESC, a.id DESC
-        LIMIT ?
+        LIMIT %s
     """, (limit,), conn))
 
 
@@ -217,7 +223,7 @@ def providers_holding_resource(resource_id: int, conn: Conn = None) -> list[dict
             JOIN Requests rq ON a.request_id = rq.id
             GROUP BY a.provider_id
         ) perf ON perf.provider_id = p.id
-        WHERE sl.resource_id = ? AND sl.quantity > 0
+        WHERE sl.resource_id = %s AND sl.quantity > 0
         ORDER BY sl.quantity DESC
     """, (resource_id,), conn))
 
@@ -225,97 +231,93 @@ def providers_holding_resource(resource_id: int, conn: Conn = None) -> list[dict
 def get_stock_row(provider_id: int, resource_id: int, conn: Conn = None) -> dict[str, Any] | None:
     row = query_one(
         "SELECT id, quantity, low_stock_threshold FROM StockLevels "
-        "WHERE provider_id = ? AND resource_id = ?",
+        "WHERE provider_id = %s AND resource_id = %s",
         (provider_id, resource_id), conn)
     return dict(row) if row else None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Writes — callers must wrap these in `transaction()`
+#
+# Two functions that used to live here are gone, and their absence is the
+# point of the port:
+#
+#   deduct_stock()        the database now does this. trg_allocations_ai_apply
+#   insert_stock_history()  decrements StockLevels on INSERT INTO Allocations,
+#                         and trg_stocklevels_au_history records the movement.
+#                         Calling them from Python as well would decrement
+#                         twice. Allocation goes through sp_allocate_request.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def insert_request(zone_id: int, resource_id: int, quantity: float, severity: float,
                    urgency: float, population_affected: int, priority_score: float,
                    conn: Conn = None) -> int:
-    conn = conn or get_db()
-    cur = conn.execute("""
+    return execute_returning_id("""
         INSERT INTO Requests (zone_id, resource_id, quantity_requested, severity,
                               population_affected, urgency, priority_score, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-    """, (zone_id, resource_id, quantity, severity, population_affected, urgency, priority_score))
-    return int(cur.lastrowid)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+    """, (zone_id, resource_id, quantity, severity, population_affected, urgency,
+          priority_score), conn)
 
 
 def insert_allocation(request_id: int, provider_id: int, resource_id: int,
                       quantity: float, conn: Conn = None) -> int:
-    conn = conn or get_db()
-    cur = conn.execute("""
-        INSERT INTO Allocations (request_id, provider_id, resource_id, quantity_allocated)
-        VALUES (?, ?, ?, ?)
-    """, (request_id, provider_id, resource_id, quantity))
-    return int(cur.lastrowid)
+    """Record one allocation leg.
 
-
-def deduct_stock(provider_id: int, resource_id: int, quantity: float, conn: Conn = None) -> None:
-    """Decrement stock, guarding against oversell at the SQL level.
-
-    The WHERE clause makes the check and the write a single atomic statement, so
-    two concurrent allocations cannot both read the same balance and both pass.
+    The INSERT is all that happens here. Moving the stock and advancing the
+    request status are the triggers' job, so they cannot be forgotten by a
+    future caller and cannot be skipped by a client that writes directly.
     """
-    conn = conn or get_db()
-    cur = conn.execute("""
-        UPDATE StockLevels
-        SET quantity = quantity - ?, updated_at = datetime('now')
-        WHERE provider_id = ? AND resource_id = ? AND quantity >= ?
-    """, (quantity, provider_id, resource_id, quantity))
-    if cur.rowcount == 0:
-        raise ValueError("insufficient_stock")
+    return execute_returning_id("""
+        INSERT INTO Allocations (request_id, provider_id, resource_id, quantity_allocated)
+        VALUES (%s, %s, %s, %s)
+    """, (request_id, provider_id, resource_id, quantity), conn)
+
+
+def allocations_for_request(request_id: int, conn: Conn = None) -> list[dict[str, Any]]:
+    """Active allocation legs for one request, nearest-chosen order preserved."""
+    return query_all("""
+        SELECT id, provider_id, resource_id, quantity_allocated, allocated_at
+        FROM Allocations
+        WHERE request_id = %s AND status = 'active'
+        ORDER BY id
+    """, (request_id,), conn)
 
 
 def set_request_status(request_id: int, status: str, conn: Conn = None) -> None:
-    conn = conn or get_db()
-    conn.execute(
-        "UPDATE Requests SET status = ?, updated_at = datetime('now') WHERE id = ?",
-        (status, request_id))
-
-
-def insert_stock_history(provider_id: int, resource_id: int, before: float, after: float,
-                         change_type: str, details: str = "", conn: Conn = None) -> None:
-    conn = conn or get_db()
-    conn.execute("""
-        INSERT INTO StockHistory (provider_id, resource_id, quantity_before,
-                                  quantity_after, change_type, details)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (provider_id, resource_id, before, after, change_type, details))
+    # closed_at is maintained by trg_requests_bu_closed_at, so callers set
+    # only the status and ck_requests_closed_at still holds.
+    execute("UPDATE Requests SET status = %s WHERE id = %s", (status, request_id), conn)
 
 
 def log_audit(action_type: str, table_name: str, record_id: int | None = None,
               previous_value: str | None = None, new_value: str | None = None,
               details: str | None = None, user: str = "system", conn: Conn = None) -> None:
-    conn = conn or get_db()
-    conn.execute("""
-        INSERT INTO AuditLog (user, action_type, table_name, record_id,
+    execute("""
+        INSERT INTO AuditLog (actor, action_type, table_name, record_id,
                               previous_value, new_value, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user, action_type, table_name, record_id, previous_value, new_value, details))
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (user, action_type, table_name, record_id, previous_value, new_value, details), conn)
 
 
 def log_system_action(action: str, entity_type: str, entity_id: int = 0,
                       details: str = "", conn: Conn = None) -> None:
-    conn = conn or get_db()
-    conn.execute(
-        "INSERT INTO SystemLog (action, entity_type, entity_id, details) VALUES (?, ?, ?, ?)",
-        (action, entity_type, entity_id, details))
+    """Operational events. SystemLog was dropped in the merge -- it duplicated
+    AuditLog and had exactly one write site -- so these land in AuditLog under
+    the 'navigation' action type. The call site is unchanged."""
+    execute("""
+        INSERT INTO AuditLog (actor, action_type, table_name, record_id, details)
+        VALUES (%s, 'navigation', %s, %s, %s)
+    """, ("system", entity_type, entity_id or None, f"{action}: {details}"), conn)
 
 
 def insert_user_query(query_text: str, category_detected: str,
                       latitude: float | None = None, longitude: float | None = None,
                       conn: Conn = None) -> None:
-    conn = conn or get_db()
-    conn.execute(
-        "INSERT INTO UserQuery (query_text_anon, category_detected, latitude, longitude) "
-        "VALUES (?, ?, ?, ?)",
-        (query_text[:500], category_detected, latitude, longitude))
+    execute("""
+        INSERT INTO UserQuery (query_text_anon, category_detected, latitude, longitude)
+        VALUES (%s, %s, %s, %s)
+    """, (query_text[:500], category_detected, latitude, longitude), conn)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -331,7 +333,7 @@ def stock_history(limit: int = 1000, conn: Conn = None) -> list[dict[str, Any]]:
         JOIN Providers p   ON sh.provider_id = p.id
         JOIN Resources res ON sh.resource_id = res.id
         ORDER BY sh.id ASC
-        LIMIT ?
+        LIMIT %s
     """, (limit,), conn))
 
 
@@ -414,8 +416,12 @@ def request_counts_by_status(conn: Conn = None) -> list[dict[str, Any]]:
 
 def system_logs(limit: int = 100, conn: Conn = None) -> list[dict[str, Any]]:
     return rows_to_dicts(query_all("""
-        SELECT id, user, timestamp, action_type, table_name, record_id, details
+        -- AuditLog.user became `actor` and `timestamp` became `changed_at`
+        -- in the merged schema. Aliased back so the API response keeps the
+        -- field names the frontend's Logs page already renders.
+        SELECT id, actor AS user, changed_at AS timestamp,
+               action_type, table_name, record_id, details
         FROM AuditLog
-        ORDER BY timestamp DESC, id DESC
-        LIMIT ?
+        ORDER BY changed_at DESC, id DESC
+        LIMIT %s
     """, (limit,), conn))

@@ -1,28 +1,36 @@
-"""Database bootstrap, run once at application start."""
+"""Database bootstrap, run once at application start.
+
+On SQLite this created the database file if it was missing. MySQL is a
+server: the schema is applied by `make schema`, deliberately outside the
+request path, because an application that silently creates its own schema
+will happily do so against the wrong database.
+
+So this only VERIFIES, and says plainly what to run if the check fails.
+"""
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from ..core.config import get_settings
-from . import seed
+from ..core.config import DatabaseSettings
+from .connection import connect, has_core_tables
 
 log = logging.getLogger(__name__)
 
 
-def ensure_database(database_path: Path | str | None = None) -> None:
-    """Create the database if missing, otherwise apply schema + seed top-ups.
+class DatabaseNotReady(RuntimeError):
+    """The server is reachable but the schema has not been applied."""
 
-    Called from the app factory rather than lazily inside request handlers, so a
-    misconfigured database fails at boot instead of on a user's first search.
-    """
-    path = Path(database_path or get_settings().database_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
 
-    if path.exists():
-        log.info("Database found at %s — applying migrations.", path)
-        seed.migrate(path)
-    else:
-        log.info("No database at %s — creating and seeding.", path)
-        seed.main(path)
+def ensure_database(database: DatabaseSettings | None = None) -> None:
+    """Check the server is reachable and the core tables exist."""
+    conn = connect(database)
+    try:
+        if not has_core_tables(conn):
+            raise DatabaseNotReady(
+                "Connected, but the schema is missing. Apply it with:  ./run.sh schema"
+            )
+        log.info("Database ready at %s",
+                 (database.dsn_for_log() if database else "configured target"))
+    finally:
+        conn.close()

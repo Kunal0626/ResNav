@@ -1,6 +1,14 @@
 # Runtime dependencies. Pinned to compatible ranges so a transitive major
 # release cannot break a deploy without a deliberate bump.
 Flask>=3.0,<4.0
+# PyMySQL over mysql-connector-python: pure Python, so there is no build step
+# and no wheel to be missing on Apple Silicon; DictCursor maps straight onto
+# the sqlite3.Row access the code already used; and it is the lighter of the
+# two on a free deployment tier. The things this project needs from a driver
+# were verified before choosing: CALL with OUT parameters via session
+# variables, DECIMAL round-tripping, and SIGNAL surfacing as a catchable
+# error carrying errno 1644 and the message text.
+PyMySQL>=1.1,<3.0
 gunicorn>=21.2,<24.0
 numpy>=1.24,<3.0
 scikit-learn>=1.3,<2.0

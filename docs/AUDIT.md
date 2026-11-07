@@ -134,12 +134,15 @@ Consequences: results depend on how many times the suite has been run before,
 on whether a seeded dev database happens to exist, and on test order. A green
 run proves less than it appears to.
 
-The fix is for the connection layer to resolve its path from the active
-application's settings rather than a cached global. It lands in Phase 4
-alongside the MySQL port, with a test that asserts isolation — deleting no
-database and still passing twice in a row. Until then `./run.sh test` deletes
-and re-seeds `backend/instance` on every run, which makes the target
-reproducible without pretending the bug is fixed.
+**Fixed in Phase 4.** `connection._active_settings()` now reads
+`current_app.config["SETTINGS"]` when there is an app context, so the
+`Settings` injected into `create_app` are actually used, and the test fixture
+reloads `db/seed/*.sql` before every test so no test can see another's
+writes. Two regression tests in `tests/test_config.py` assert both halves:
+one builds a second app pointed at a sentinel database and checks the
+connection layer reports it, the other asserts the seeded stock total is
+unchanged at the start of a test. Verified: three consecutive full runs, 53
+passed each time, with no database rebuild in between.
 
 ### `backend/.env` is never read
 
