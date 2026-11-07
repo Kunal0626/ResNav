@@ -228,8 +228,12 @@ Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
 
 - **`npm audit` reports high and moderate vulnerabilities**, not yet triaged.
 - **No authentication.** Every caller can allocate.
-- **No deployment.** Nothing has been deployed anywhere. The container
-  stack runs locally; no hosting provider has been configured or paid for.
+- **No deployment.** Nothing has been deployed anywhere; no hosting account
+  exists. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) has the research and the
+  recommendation — the short version is that most of the 2026 free tier
+  cannot run this project at all, because TiDB (the usual free
+  "MySQL-compatible" answer) supports neither triggers nor stored
+  procedures.
 
 ## Licence
 
