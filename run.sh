@@ -18,6 +18,7 @@
 #   api      run the Flask development server (http://127.0.0.1:5001)
 #   web      run the Vite development server (http://localhost:5173)
 #   test     run the backend test suite and the SQL tests
+#   concurrency  two-session race, isolation and deadlock experiments
 #   lint     ruff over the backend, eslint over the frontend
 #   build    production build of the frontend
 #   demo     the end-to-end worked demo
@@ -361,7 +362,10 @@ target_test() {
 target_lint() {
   need_venv; need_node_modules
   echo "==> ruff"
+  # db/ and tools/ hold real Python too -- the seed generator, the SQL test
+  # runner and the concurrency experiments -- so they are linted as well.
   ( cd backend && "$PY" -m ruff check . )
+  "$PY" -m ruff check db/ tools/
   echo "==> eslint"
   ( cd frontend && "$NPM_BIN" run lint )
 }
@@ -369,6 +373,15 @@ target_lint() {
 target_build() {
   need_node_modules
   ( cd frontend && "$NPM_BIN" run build )
+}
+
+# The two-session experiments. Separate from `test` because they take
+# tens of seconds, deliberately provoke deadlocks and lock-wait timeouts,
+# and two of them are supposed to demonstrate failure rather than success.
+target_concurrency() {
+  load_env; need_venv
+  connect   # exports nothing, but fails early if the database is unreachable
+  "$PY" -I db/tests/concurrency/run_all.py "$@"
 }
 
 target_shell() {
@@ -451,6 +464,7 @@ main() {
     lint)    target_lint ;;
     build)   target_build ;;
     demo)    target_demo ;;
+    concurrency) target_concurrency "$@" ;;
     shell)   target_shell "$@" ;;
     ""|-h|--help|help) usage ;;
     *) echo "error: unknown target '${target}'" >&2; echo >&2; usage ;;

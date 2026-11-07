@@ -7,7 +7,9 @@ relationship lines whose cardinality tokens are not real Mermaid tokens,
 missing relationship labels, entities used but never declared, and stray
 pipe characters outside cardinality tokens.
 """
-import re, sys
+import pathlib
+import re
+import sys
 
 LEFT  = {"||", "|o", "}o", "}|"}
 RIGHT = {"||", "o|", "o{", "|{"}
@@ -25,7 +27,7 @@ def blocks_from(path):
     block, not the markdown file, because that is what a Mermaid error message
     would refer to.
     """
-    text = open(path).read()
+    text = pathlib.Path(path).read_text()
     if not path.endswith(".md"):
         return [(1, text.splitlines())]
     out, cur, start = [], None, 0
@@ -44,7 +46,7 @@ def blocks_from(path):
 def check_block(lines):
     errors, warns = [], []
     declared, used = set(), set()
-    depth, cur = 0, None
+    depth = 0
 
     if not lines or lines[0].strip() != "erDiagram":
         errors.append("line 1: must be exactly 'erDiagram'")
@@ -56,14 +58,14 @@ def check_block(lines):
         if s == "}":
             if depth == 0:
                 errors.append(f"line {n}: '}}' with no open entity block")
-            depth, cur = max(0, depth - 1), None
+            depth = max(0, depth - 1)
             continue
         m = re.match(r'^(?P<name>[A-Za-z_]\w*)\s*\{$', s)
         if m and depth == 0:
             name = m.group("name")
             if name in declared:
                 errors.append(f"line {n}: entity '{name}' declared twice")
-            declared.add(name); depth, cur = 1, name
+            declared.add(name); depth = 1
             continue
         if depth == 1:
             if not ATTR.match(s):

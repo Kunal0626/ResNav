@@ -50,7 +50,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | **done** — `make schema`, 14 SQL tests |
 | 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | **done** |
 | 5 | One deterministic seed, plus a tiny hand-checkable set | **done** — `make reset` |
-| 6 | Concurrency proof: oversell, isolation levels, deadlock | not started |
+| 6 | Concurrency proof: oversell, isolation levels, deadlock | **done** — [`CONCURRENCY.md`](docs/CONCURRENCY.md) |
 | 7 | Surface alerts, audit log and "why this centre" in the UI | not started |
 | 8 | Run anywhere: Docker and a no-Docker local path | not started |
 | 9 | Measure, rewrite this README, interview notes | not started |
@@ -155,6 +155,7 @@ password stays out of `ps` output and shell history.
 | `check` | MySQL access and SQL feature probe | yes |
 | `docs` | grammar-check the Mermaid diagrams | yes |
 | `test` | backend suite + SQL suite | yes — 53 + 14 tests |
+| `concurrency` | two-session race, isolation and deadlock experiments | yes — 6 experiments |
 | `lint` | `ruff` + `eslint` | yes |
 | `build` | production frontend build | yes |
 | `api` / `web` | development servers | yes |

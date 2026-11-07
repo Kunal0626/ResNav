@@ -83,7 +83,30 @@ BEGIN
            FOR UPDATE;
 
     -- Pass 2: now that every row is locked, rank by real distance and read
-    -- quantities that cannot change underneath us.
+    -- the quantities to allocate against.
+    --
+    -- FOR UPDATE here is NOT a second round of locking -- pass 1 already
+    -- holds every row this can return, so no new lock is taken and the
+    -- canonical order is not disturbed. It is here because of how
+    -- REPEATABLE READ works, and leaving it off was a real bug that only a
+    -- two-session test could find:
+    --
+    --   A plain SELECT reads the transaction's SNAPSHOT, established at the
+    --   first read. A locking read reads the LATEST COMMITTED row. So a
+    --   session that waited on pass 1's lock would acquire it correctly,
+    --   then plan against the quantities as they were BEFORE the session it
+    --   waited for committed. It would decide to allocate stock that had
+    --   just been taken, and the UPDATE would be refused by
+    --   trg_stocklevels_bu_guard with 'stock_negative'.
+    --
+    --   The invariant held -- stock never went negative -- but the caller
+    --   got an unhandled error instead of a correct empty allocation. The
+    --   lock was right and the read was stale.
+    --
+    -- Found by db/tests/concurrency/c03_real_allocator.py. Fifty-three
+    -- single-session Python tests and fourteen single-session SQL tests all
+    -- passed with the bug present, because none of them had a second session
+    -- to go stale against.
     DECLARE cur_plan CURSOR FOR
         SELECT sl.provider_id, sl.quantity
           FROM StockLevels sl
@@ -92,7 +115,8 @@ BEGIN
            AND sl.quantity > 0
          ORDER BY fn_haversine_km(v_zone_lat, v_zone_lon, p.latitude, p.longitude) ASC,
                   sl.quantity DESC,
-                  sl.provider_id ASC;
+                  sl.provider_id ASC
+           FOR UPDATE;
 
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = 1;
 

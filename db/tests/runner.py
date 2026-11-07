@@ -59,6 +59,9 @@ def run_sql(sql: str) -> str:
     proc = subprocess.run(
         [MYSQL, f"--defaults-extra-file={DEFAULTS}", "--force", DATABASE],
         input=sql, capture_output=True, text=True,
+        # check=False: a non-zero exit is expected whenever a negative test
+        # provokes the error it is asserting. The output is the result.
+        check=False,
     )
     return proc.stdout + proc.stderr
 
