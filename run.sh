@@ -274,25 +274,27 @@ SQL
   mysql_raw --table -e "SELECT CURRENT_USER() AS effective_user, @@hostname AS host_name;"
   echo
   echo "--- feature probe --------------------------------------------------"
-  echo "    (uses a scratch database, dra_probe_tmp, and drops it afterwards)"
+  echo "    (creates probe_* objects in $DRA_MYSQL_DB and drops them afterwards)"
   echo
 
-  # Run tolerantly: if a statement aborts the script we still want to print
-  # what was recorded, because the missing sentinel row plus the client's own
-  # error message is how we find out what the server refused.
+  # --force so the client keeps going after a refused statement. Without it a
+  # single missing privilege hides every other answer, and the whole point of
+  # the probe is to learn as much as possible in one run. Nothing is masked:
+  # each refusal is printed, every passing feature still records its row, and
+  # the sentinel row at the end is what says the script reached the bottom.
   local probe_status=0
-  mysql_raw < tools/capabilities.sql || probe_status=$?
+  mysql_db --force < tools/capabilities.sql || probe_status=$?
 
-  mysql_raw --table -e \
-    "SELECT seq, feature, verdict, detail FROM dra_probe_tmp.probe_result ORDER BY seq;"
+  mysql_db --table -e \
+    "SELECT seq, feature, verdict, detail FROM probe_result ORDER BY seq;"
 
   local failures completed
-  failures=$(mysql_raw -N -B -e \
-    "SELECT COUNT(*) FROM dra_probe_tmp.probe_result WHERE verdict <> 'PASS';")
-  completed=$(mysql_raw -N -B -e \
-    "SELECT COUNT(*) FROM dra_probe_tmp.probe_result WHERE feature = 'probe_completed';")
+  failures=$(mysql_db -N -B -e \
+    "SELECT COUNT(*) FROM probe_result WHERE verdict <> 'PASS';")
+  completed=$(mysql_db -N -B -e \
+    "SELECT COUNT(*) FROM probe_result WHERE feature = 'probe_completed';")
 
-  mysql_raw -e "DROP DATABASE IF EXISTS dra_probe_tmp;"
+  mysql_db -e "DROP TABLE IF EXISTS probe_result;"
 
   echo
   if [[ "$completed" != "1" ]]; then
@@ -367,7 +369,13 @@ target_build() {
   ( cd frontend && "$NPM_BIN" run build )
 }
 
-target_shell() { connect; exec mysql_db; }
+target_shell() {
+  connect
+  # Deliberately NOT `exec`. mysql_db is a shell function, which exec cannot
+  # replace the process with -- and even with the binary spelled out, exec
+  # would discard the EXIT trap and leak the temporary credentials file.
+  mysql_db
+}
 
 target_schema() { not_yet schema 3; }
 target_seed()   { not_yet seed 5; }

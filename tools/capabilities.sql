@@ -20,9 +20,19 @@
 --     script died partway and the client's error output says where.
 -- ---------------------------------------------------------------------------
 
-DROP DATABASE IF EXISTS dra_probe_tmp;
-CREATE DATABASE dra_probe_tmp;
-USE dra_probe_tmp;
+-- Everything below lives in the project database, with a probe_ prefix, and is
+-- dropped at both ends. The first version created its own scratch database,
+-- which needed CREATE/DROP on *.* -- a global privilege that a project account
+-- has no business holding. Needing only rights on the project's own schema
+-- means `GRANT ALL ON resnav.* TO <user>` is enough to run this.
+
+DROP PROCEDURE IF EXISTS probe_negative_tests;
+DROP PROCEDURE IF EXISTS probe_for_update;
+DROP FUNCTION  IF EXISTS probe_double;
+DROP TRIGGER   IF EXISTS probe_trg_signal_bi;
+DROP TABLE     IF EXISTS probe_child, probe_parent, probe_alloc, probe_req_item,
+                         probe_req, probe_partial, probe_generated, probe_signal,
+                         probe_check, probe_result;
 
 CREATE TABLE probe_result (
   seq     INT AUTO_INCREMENT PRIMARY KEY,
@@ -40,17 +50,17 @@ SELECT 'innodb_is_default',
        CONCAT('default_storage_engine=', @@default_storage_engine);
 
 -- === 2. CHECK constraints are ENFORCED =====================================
-CREATE TABLE t_check (
+CREATE TABLE probe_check (
   n INT NOT NULL,
-  CONSTRAINT ck_positive CHECK (n > 0)
+  CONSTRAINT probe_ck_positive CHECK (n > 0)
 ) ENGINE=InnoDB;
 
 -- === 3. SIGNAL SQLSTATE '45000' from a trigger =============================
 -- This is how every Phase 4 guard trigger will reject bad data.
-CREATE TABLE t_signal (n INT NOT NULL) ENGINE=InnoDB;
+CREATE TABLE probe_signal (n INT NOT NULL) ENGINE=InnoDB;
 
 DELIMITER $$
-CREATE TRIGGER trg_t_signal_bi BEFORE INSERT ON t_signal
+CREATE TRIGGER probe_trg_signal_bi BEFORE INSERT ON probe_signal
 FOR EACH ROW
 BEGIN
   IF NEW.n > 3 THEN
@@ -62,18 +72,18 @@ DELIMITER ;
 -- === 4. Generated (computed) columns, STORED ===============================
 -- Used for items.is_perishable and center_stock.available, so that a value
 -- which is derivable cannot be stored inconsistently.
-CREATE TABLE t_generated (
+CREATE TABLE probe_generated (
   a INT NOT NULL,
   b INT NOT NULL,
   total INT GENERATED ALWAYS AS (a + b) STORED
 ) ENGINE=InnoDB;
-INSERT INTO t_generated (a, b) VALUES (2, 3);
+INSERT INTO probe_generated (a, b) VALUES (2, 3);
 
 INSERT INTO probe_result (feature, verdict, detail)
 SELECT 'generated_column_stored',
        IF(total = 5, 'PASS', 'FAIL'),
        CONCAT('2+3 computed as ', total)
-FROM t_generated;
+FROM probe_generated;
 
 -- === 5. "Partial unique index" emulation ===================================
 -- MySQL has no partial / filtered indexes, so we cannot write
@@ -82,63 +92,63 @@ FROM t_generated;
 -- unless the row is open. A multi-column UNIQUE index in MySQL ignores rows
 -- where any indexed column is NULL, so resolved rows never collide while open
 -- rows are held unique. stock_alerts in Phase 2 depends on this.
-CREATE TABLE t_partial (
+CREATE TABLE probe_partial (
   id        INT AUTO_INCREMENT PRIMARY KEY,
   center_id INT NOT NULL,
   item_id   INT NOT NULL,
   status    ENUM('open','resolved') NOT NULL,
   open_center_id INT GENERATED ALWAYS AS (IF(status = 'open', center_id, NULL)) STORED,
   open_item_id   INT GENERATED ALWAYS AS (IF(status = 'open', item_id,   NULL)) STORED,
-  UNIQUE KEY uq_one_open_alert (open_center_id, open_item_id)
+  UNIQUE KEY probe_uq_one_open_alert (open_center_id, open_item_id)
 ) ENGINE=InnoDB;
 
-INSERT INTO t_partial (center_id, item_id, status) VALUES (1, 1, 'open');
-INSERT INTO t_partial (center_id, item_id, status) VALUES (1, 1, 'resolved');
-INSERT INTO t_partial (center_id, item_id, status) VALUES (1, 1, 'resolved');
+INSERT INTO probe_partial (center_id, item_id, status) VALUES (1, 1, 'open');
+INSERT INTO probe_partial (center_id, item_id, status) VALUES (1, 1, 'resolved');
+INSERT INTO probe_partial (center_id, item_id, status) VALUES (1, 1, 'resolved');
 
 INSERT INTO probe_result (feature, verdict, detail)
 SELECT 'partial_unique_allows_resolved_dupes',
        IF(COUNT(*) = 3, 'PASS', 'FAIL'),
        CONCAT(COUNT(*), ' rows accepted (expected 3: 1 open + 2 resolved)')
-FROM t_partial;
+FROM probe_partial;
 
 -- === 6. Composite foreign keys =============================================
 -- requests will carry both area_id and disaster_id. A two-column FK makes it
 -- impossible for them to disagree, without needing a trigger to police it.
-CREATE TABLE t_parent (
+CREATE TABLE probe_parent (
   a INT NOT NULL PRIMARY KEY,
   b INT NOT NULL,
-  UNIQUE KEY uq_ab (a, b)
+  UNIQUE KEY probe_uq_ab (a, b)
 ) ENGINE=InnoDB;
 
-CREATE TABLE t_child (
+CREATE TABLE probe_child (
   id INT AUTO_INCREMENT PRIMARY KEY,
   a  INT NOT NULL,
   b  INT NOT NULL,
-  CONSTRAINT fk_child_ab FOREIGN KEY (a, b) REFERENCES t_parent (a, b)
+  CONSTRAINT probe_fk_child_ab FOREIGN KEY (a, b) REFERENCES probe_parent (a, b)
 ) ENGINE=InnoDB;
 
-INSERT INTO t_parent (a, b) VALUES (1, 10);
-INSERT INTO t_child (a, b) VALUES (1, 10);
+INSERT INTO probe_parent (a, b) VALUES (1, 10);
+INSERT INTO probe_child (a, b) VALUES (1, 10);
 
 -- === 7. ON DELETE CASCADE blocked by a downstream RESTRICT =================
 -- The schema relies on this: deleting a request cascades to request_items,
 -- but request_items is RESTRICTed by allocations, so a request with
 -- allocation history cannot be deleted at all. Worth proving, not assuming.
-CREATE TABLE t_req (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
-CREATE TABLE t_req_item (
+CREATE TABLE probe_req (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE probe_req_item (
   id     INT NOT NULL PRIMARY KEY,
   req_id INT NOT NULL,
-  CONSTRAINT fk_ri_req FOREIGN KEY (req_id) REFERENCES t_req (id) ON DELETE CASCADE
+  CONSTRAINT probe_fk_ri_req FOREIGN KEY (req_id) REFERENCES probe_req (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
-CREATE TABLE t_alloc (
+CREATE TABLE probe_alloc (
   id      INT NOT NULL PRIMARY KEY,
   ri_id   INT NOT NULL,
-  CONSTRAINT fk_al_ri FOREIGN KEY (ri_id) REFERENCES t_req_item (id) ON DELETE RESTRICT
+  CONSTRAINT probe_fk_al_ri FOREIGN KEY (ri_id) REFERENCES probe_req_item (id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
-INSERT INTO t_req VALUES (1);
-INSERT INTO t_req_item VALUES (1, 1);
-INSERT INTO t_alloc VALUES (1, 1);
+INSERT INTO probe_req VALUES (1);
+INSERT INTO probe_req_item VALUES (1, 1);
+INSERT INTO probe_alloc VALUES (1, 1);
 
 -- === 8. Window functions ===================================================
 INSERT INTO probe_result (feature, verdict, detail)
@@ -179,14 +189,14 @@ FROM (
 -- followed by an insert is a race: two sessions can both pass the check and
 -- then one hits the unique index, which would abort the stock update that
 -- fired the trigger. The upsert cannot race.
-INSERT INTO t_partial (center_id, item_id, status) VALUES (1, 1, 'open')
+INSERT INTO probe_partial (center_id, item_id, status) VALUES (1, 1, 'open')
   ON DUPLICATE KEY UPDATE id = id;
 
 INSERT INTO probe_result (feature, verdict, detail)
 SELECT 'upsert_noop_on_duplicate',
        IF(COUNT(*) = 1, 'PASS', 'FAIL'),
        CONCAT(COUNT(*), ' open row(s) after a duplicate upsert (expected 1)')
-FROM t_partial WHERE status = 'open';
+FROM probe_partial WHERE status = 'open';
 
 -- === Negative tests: things that MUST be rejected ==========================
 DELIMITER $$
@@ -203,7 +213,7 @@ BEGIN
 
   -- 2b. CHECK must reject n = -1 with errno 3819.
   SET v_errno = 0;
-  INSERT INTO t_check (n) VALUES (-1);
+  INSERT INTO probe_check (n) VALUES (-1);
   INSERT INTO probe_result (feature, verdict, detail)
   VALUES ('check_constraint_enforced',
           IF(v_errno = 3819, 'PASS', 'FAIL'),
@@ -211,7 +221,7 @@ BEGIN
 
   -- 3b. The trigger must raise 45000 / errno 1644 with our exact message.
   SET v_errno = 0; SET v_sqlstate = ''; SET v_msg = '';
-  INSERT INTO t_signal (n) VALUES (5);
+  INSERT INTO probe_signal (n) VALUES (5);
   INSERT INTO probe_result (feature, verdict, detail)
   VALUES ('trigger_signal_45000',
           IF(v_errno = 1644 AND v_sqlstate = '45000' AND v_msg = 'probe: refused', 'PASS', 'FAIL'),
@@ -219,7 +229,7 @@ BEGIN
 
   -- 5b. A second OPEN row for the same (center,item) must be rejected: 1062.
   SET v_errno = 0;
-  INSERT INTO t_partial (center_id, item_id, status) VALUES (1, 1, 'open');
+  INSERT INTO probe_partial (center_id, item_id, status) VALUES (1, 1, 'open');
   INSERT INTO probe_result (feature, verdict, detail)
   VALUES ('partial_unique_blocks_second_open',
           IF(v_errno = 1062, 'PASS', 'FAIL'),
@@ -227,7 +237,7 @@ BEGIN
 
   -- 6b. Composite FK must reject the pair (1,11): parent holds only (1,10).
   SET v_errno = 0;
-  INSERT INTO t_child (a, b) VALUES (1, 11);
+  INSERT INTO probe_child (a, b) VALUES (1, 11);
   INSERT INTO probe_result (feature, verdict, detail)
   VALUES ('composite_fk_rejects_mismatch',
           IF(v_errno = 1452, 'PASS', 'FAIL'),
@@ -235,7 +245,7 @@ BEGIN
 
   -- 7b. Deleting the parent must fail: the CASCADE hits a RESTRICT below it.
   SET v_errno = 0;
-  DELETE FROM t_req WHERE id = 1;
+  DELETE FROM probe_req WHERE id = 1;
   INSERT INTO probe_result (feature, verdict, detail)
   VALUES ('cascade_blocked_by_restrict',
           IF(v_errno = 1451, 'PASS', 'FAIL'),
@@ -252,7 +262,7 @@ BEGIN
     GET DIAGNOSTICS CONDITION 1 v_errno = MYSQL_ERRNO;
 
   START TRANSACTION;
-  SELECT a INTO v_n FROM t_generated WHERE a = 2 FOR UPDATE;
+  SELECT a INTO v_n FROM probe_generated WHERE a = 2 FOR UPDATE;
   ROLLBACK;
 
   INSERT INTO probe_result (feature, verdict, detail)
@@ -283,3 +293,12 @@ SELECT 'create_deterministic_function',
 -- === Sentinel ==============================================================
 INSERT INTO probe_result (feature, verdict, detail)
 VALUES ('probe_completed', 'PASS', 'every probe statement ran to the end');
+
+-- Clean up everything except probe_result, which run.sh reads and then drops.
+DROP PROCEDURE IF EXISTS probe_negative_tests;
+DROP PROCEDURE IF EXISTS probe_for_update;
+DROP FUNCTION  IF EXISTS probe_double;
+DROP TRIGGER   IF EXISTS probe_trg_signal_bi;
+DROP TABLE     IF EXISTS probe_child, probe_parent, probe_alloc, probe_req_item,
+                         probe_req, probe_partial, probe_generated, probe_signal,
+                         probe_check;

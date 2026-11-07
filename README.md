@@ -72,6 +72,33 @@ tools/       capabilities.sql (server feature probe), check_mermaid.py
 because that is the version where `CHECK` constraints began to be *enforced*
 rather than parsed and ignored. Development is on MySQL 9.5.0.
 
+Create the database and an account for it, as a MySQL administrator:
+
+```sql
+CREATE USER IF NOT EXISTS 'resnav_app'@'localhost' IDENTIFIED BY '<password>';
+CREATE DATABASE IF NOT EXISTS resnav
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+GRANT ALL PRIVILEGES ON resnav.* TO 'resnav_app'@'localhost';
+GRANT SELECT ON performance_schema.* TO 'resnav_app'@'localhost';
+```
+
+Rights on the project's own schema are all that is needed — `./run.sh check`
+creates its scratch objects inside `resnav` rather than in a database of its
+own, precisely so the account never needs a global `CREATE`.
+
+**If your server has binary logging enabled**, you will also need:
+
+```sql
+SET PERSIST log_bin_trust_function_creators = 1;
+```
+
+Without it MySQL refuses to let a non-`SUPER` account create triggers or
+stored functions (error 1419), because a non-deterministic routine written to
+the binary log can compute a different result on a replica and silently drift.
+This project's functions are declared `DETERMINISTIC NO SQL`, and a
+single-node development server has no replica to drift from. `./run.sh check`
+tells you whether you need this. `SET PERSIST` survives a restart.
+
 ```bash
 ./run.sh install                      # backend venv + frontend dependencies
 cp .env.example .env && chmod 600 .env   # then edit it

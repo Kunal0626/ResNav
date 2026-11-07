@@ -186,6 +186,58 @@ This is exactly why the allocation decision has to move into a stored procedure
 that takes `SELECT … FOR UPDATE` locks in a fixed order. It also means Phase 6
 can demonstrate a *real* bug and a *real* fix rather than a staged one.
 
+## The target MySQL server
+
+`./run.sh check` was run against the development server on 2026-11-07. All 15
+probes pass. What it reported:
+
+| Setting | Value |
+|---|---|
+| version | 9.5.0, MySQL Community Server - GPL |
+| default_storage_engine | InnoDB |
+| transaction_isolation | REPEATABLE-READ |
+| innodb_lock_wait_timeout | 50 |
+| innodb_deadlock_detect | ON |
+| character_set / collation | utf8mb4 / utf8mb4_0900_ai_ci |
+| sql_mode | `ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION` |
+| log_bin | ON |
+| lower_case_table_names | 2 |
+
+Every feature the later phases depend on is confirmed on this server rather
+than assumed: enforced `CHECK` constraints (rejecting with errno 3819),
+`SIGNAL SQLSTATE '45000'` from a trigger (errno 1644, message preserved
+verbatim), `STORED` generated columns, the `NULL`-in-a-unique-index trick that
+substitutes for a partial index, composite foreign keys (errno 1452 on a
+mismatched pair), `ON DELETE CASCADE` blocked by a downstream `RESTRICT`
+(errno 1451), window functions, recursive CTEs, `ROLLUP`,
+`SELECT ... FOR UPDATE`, a no-op `ON DUPLICATE KEY UPDATE` upsert, and
+creating a `DETERMINISTIC` function.
+
+Two things the probe found that had to be fixed before Phase 3 could start:
+
+1. **Binary logging is on and `log_bin_trust_function_creators` was off**, so a
+   non-`SUPER` account could not create triggers or stored functions at all
+   (error 1419). The probe caught this in the most useful possible way: the
+   trigger silently failed to be created, so the `INSERT` that should have
+   been rejected *succeeded*, and `trigger_signal_45000` reported
+   `errno=0 sqlstate= msg=""`. A test that expects an error and gets silence
+   is a failing test. Resolved with
+   `SET PERSIST log_bin_trust_function_creators = 1`, now recorded as a
+   prerequisite in the README.
+2. **The probe originally created its own scratch database**, which required
+   `CREATE`/`DROP` on `*.*` — a global privilege a project account should not
+   hold. It now creates `probe_`-prefixed objects inside the project database
+   and drops them, so `GRANT ALL ON resnav.*` is sufficient. Verified
+   afterwards: `resnav` contains 0 tables, 0 routines and 0 triggers.
+
+`sql_mode` includes `STRICT_TRANS_TABLES` and `ONLY_FULL_GROUP_BY`, which the
+Phase 3 DDL and the Phase 6 reporting queries both have to satisfy — a silent
+truncation will be an error here, and every non-aggregated column has to
+appear in `GROUP BY`. `lower_case_table_names = 2` means table names are
+stored as written but compared case-insensitively, which is macOS's default
+and differs from a typical Linux server's `0`; the schema therefore should not
+rely on two tables whose names differ only by case.
+
 ## Inherited schema, as a starting point
 
 ResNav's `schema.sql` is 667 lines: **17 tables, 5 triggers, 12 views, 40
