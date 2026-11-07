@@ -1,29 +1,64 @@
-# Credentials. Never commit these. See .env.example for the shape.
+# ── Credentials ──────────────────────────────────────────────────────────────
+# Never commit these. See .env.example for the shape.
 .env
 .env.*
 !.env.example
 *.cnf
 *.my.cnf
 
-# Local scratch output produced by run.sh / tests
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# ── Databases ────────────────────────────────────────────────────────────────
+# The schema and seed live in db/, so a database file is a build artefact.
+# Rebuild it with `make reset`.
+backend/instance/
+instance/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+# MySQL dumps can contain real data; export them outside the repo.
+*.sql.gz
+dump.sql
+
+# ── Local scratch output from run.sh and the test runners ────────────────────
 out/
 *.log
 *.err
-
-# Captured output that a test produced but has not been reviewed yet
+# Captured test output that has not been reviewed and promoted to .expected
+db/tests/**/*.actual
 tests/**/*.actual
 
-# OS / editor noise
+# ── Editors and OS ───────────────────────────────────────────────────────────
 .DS_Store
 ._*
 .idea/
 .vscode/
 *.swp
 
-# Python bytecode (the harness is stdlib-only, but imports still cache)
-__pycache__/
-*.py[cod]
-
-# Legacy patterns kept from the first commit
-*.db
-*.sqlite
+# ── Local tooling ────────────────────────────────────────────────────────────
+# .claude/launch.json IS tracked: it is how the preview/dev-server tooling
+# knows how to start this project. Everything else under .claude/ is personal.
+.claude/*
+!.claude/launch.json
