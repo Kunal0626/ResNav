@@ -34,7 +34,8 @@ Two projects merged into one:
 
 [`docs/AUDIT.md`](docs/AUDIT.md) is the measured record of what ResNav actually
 did before the merge: which of its README's claims held up, which did not, and
-the defects found. It is the reason this README is allowed to say what it says.
+the defects found. [`docs/MAPPING.md`](docs/MAPPING.md) then reconciles the two
+schemas into one, with the usage evidence behind every keep, drop and add. It is the reason this README is allowed to say what it says.
 [`docs/RESNAV_ORIGINAL_README.md`](docs/RESNAV_ORIGINAL_README.md) is the old
 README, kept for provenance — treat its claims as unverified unless
 `docs/AUDIT.md` confirms them.
@@ -45,7 +46,7 @@ README, kept for provenance — treat its claims as unverified unless
 |---|---|---|
 | 0 | Audit ResNav: build it from scratch, measure every claim | **done** — [`docs/AUDIT.md`](docs/AUDIT.md) |
 | 1 | Restructure the repo, import ResNav, unify configuration | **done** |
-| 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | not started |
+| 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | **done** — [`MAPPING.md`](docs/MAPPING.md), [`DESIGN.md`](docs/DESIGN.md), [`NORMALIZATION.md`](docs/NORMALIZATION.md) |
 | 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | not started |
 | 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | not started |
 | 5 | One deterministic seed, plus a tiny hand-checkable set | not started |
