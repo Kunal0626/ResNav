@@ -40,13 +40,23 @@ class _JSONProvider(DefaultJSONProvider):
     and carries no zone, so labelling it GMT shifts every displayed time by
     the UTC offset -- five and a half hours here.
 
-    ISO 8601 without a zone is what the data actually is: a local wall-clock
-    time. new Date("2026-11-07T23:08:03") parses it as local, which is right.
+    The offset is attached rather than omitted. MySQL hands back a NAIVE
+    datetime in the server's own zone, and "no zone" only works while the
+    browser and the database agree about what local means. They stop
+    agreeing the moment this runs in a container: MySQL is UTC in Docker and
+    IST on the development machine, so an alert raised seconds ago rendered
+    as "6 hours ago" in the containerised stack.
+
+    `astimezone()` on a naive datetime reads it as local time and attaches
+    the running process's offset -- +00:00 in the container, +05:30 here --
+    which is correct in both, and leaves the browser nothing to guess.
     """
 
     def default(self, o):
         if isinstance(o, datetime):
-            return o.isoformat(sep=" ", timespec="seconds")
+            if o.tzinfo is None:
+                o = o.astimezone()
+            return o.isoformat(timespec="seconds")
         if isinstance(o, date):
             return o.isoformat()
         if isinstance(o, Decimal):

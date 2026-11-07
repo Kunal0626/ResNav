@@ -1,48 +1,89 @@
-# ⚠ NOT YET UPDATED FOR MYSQL, AND NOT TESTED.
+# The whole stack: MySQL, the Flask API, and the built SPA behind nginx.
 #
-# This file was imported from ResNav AI, where the database was a SQLite file
-# on a mounted volume. The merged app uses MySQL, so this stack is wrong: it
-# has no database service and still sets DATABASE_PATH.
+#     cp .env.example .env     # then set DRA_MYSQL_PASSWORD
+#     docker compose up --build
+#     open http://localhost:8080
 #
-# Phase 8 rewrites it as mysql + api + web and tests it. Docker is not
-# installed on the development machine, so nothing here has been run.
-# Until then, use the local path:  ./run.sh install && ./run.sh reset
-#
-# Local production-parity stack: the API in a container, the frontend built and
-# served as static files. For day-to-day development use `npm run dev` and
-# `python manage.py run` instead — both give hot reload.
+# The no-Docker path is `make install && make reset && make api` against a
+# local MySQL, and is the one this project is developed against. Both are
+# documented in the README.
+
+name: resnav
 
 services:
-  api:
-    build: ./backend
+  db:
+    image: mysql:8.4
+    # 8.4 rather than latest: this project targets 8.0.16+ syntax, and
+    # pinning a major means a `docker compose pull` cannot change the
+    # database engine under a schema that was tested against it.
+    command:
+      - --log-bin-trust-function-creators=ON
+      # Required so a non-SUPER account can create the triggers and stored
+      # functions this schema is built from. See docs/AUDIT.md; the probe in
+      # tools/capabilities.sql reports it.
     environment:
-      APP_ENV: production
-      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env or the environment}
-      CORS_ORIGINS: http://localhost:8080
-      DATABASE_PATH: /data/resource_navigator.db
-      LOG_LEVEL: INFO
+      # Both containers run UTC, so the database and the API agree about what
+      # a naive timestamp means. The API attaches the offset on the way out.
+      TZ: UTC
+      MYSQL_ROOT_PASSWORD: ${DRA_MYSQL_ROOT_PASSWORD:-rootpw}
+      MYSQL_DATABASE: ${DRA_MYSQL_DB:-resnav}
+      MYSQL_USER: ${DRA_MYSQL_USER:-resnav_app}
+      MYSQL_PASSWORD: ${DRA_MYSQL_PASSWORD:?set DRA_MYSQL_PASSWORD in .env}
     volumes:
-      - resnav-data:/data
-    ports:
-      - '8000:8000'
+      - resnav-db:/var/lib/mysql
+      # The schema, routines and seed, applied once by the image's own
+      # entrypoint the first time the volume is empty. Read-only: a
+      # container should never be able to edit the repository.
+      - ./db:/sql:ro
+      - ./docker/mysql-init.sh:/docker-entrypoint-initdb.d/10-resnav.sh:ro
     healthcheck:
-      test: ['CMD', 'curl', '-fsS', 'http://localhost:8000/api/health']
-      interval: 30s
+      # mysqladmin ping answers before the init scripts have finished, so it
+      # would let the API start against an empty schema. Checking for a table
+      # the seed creates is what actually means "ready".
+      test: ["CMD-SHELL", "mysql -uroot -p\"$$MYSQL_ROOT_PASSWORD\" -e 'SELECT COUNT(*) FROM Providers' \"$$MYSQL_DATABASE\" || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      TZ: UTC
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      # The browser talks to nginx on 8080, which proxies /api, so requests
+      # are same-origin and this is only a fallback for direct access.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DRA_MYSQL_HOST: db
+      DRA_MYSQL_PORT: 3306
+      DRA_MYSQL_DB: ${DRA_MYSQL_DB:-resnav}
+      DRA_MYSQL_USER: ${DRA_MYSQL_USER:-resnav_app}
+      DRA_MYSQL_PASSWORD: ${DRA_MYSQL_PASSWORD:?set DRA_MYSQL_PASSWORD in .env}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      ENABLE_TRANSFORMERS: ${ENABLE_TRANSFORMERS:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Exposed for curl and the concurrency scripts; the SPA does not use it.
+      - '8000:8000'
     restart: unless-stopped
 
   web:
-    image: nginx:alpine
+    build:
+      # Repository root, because the Dockerfile needs docker/nginx.conf too.
+      context: .
+      dockerfile: frontend/Dockerfile
     depends_on:
       api:
         condition: service_healthy
-    volumes:
-      - ./frontend/dist:/usr/share/nginx/html:ro
     ports:
       - '8080:80'
     restart: unless-stopped
 
 volumes:
-  resnav-data:
+  resnav-db:

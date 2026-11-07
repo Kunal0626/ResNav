@@ -89,13 +89,22 @@ def test_timestamps_serialise_as_iso_not_http_date(client):
     The "GMT" was the worse half: MySQL's NOW(6) is local wall-clock time
     with no zone, so labelling it GMT shifted every displayed time by the UTC
     offset.
+
+    The offset is now explicit. Omitting it worked only while the browser and
+    the database agreed about local time, and they stop agreeing the moment
+    this runs in a container -- MySQL is UTC there and IST on the development
+    machine, which rendered a just-raised alert as "6 hours ago".
     """
     import re
+    from datetime import datetime
 
     body = client.get("/api/stock").get_json()
     stamp = body["stock"][0]["updated_at"]
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", stamp), stamp
-    assert "GMT" not in stamp
+    assert "GMT" not in stamp, stamp
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}", stamp), stamp
+    # And it must be a timestamp a client can actually parse back.
+    parsed = datetime.fromisoformat(stamp)
+    assert parsed.tzinfo is not None
 
 
 def test_stock_reports_standing_alerts_separately_from_low_lines(client, reference):

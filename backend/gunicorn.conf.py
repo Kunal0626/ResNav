@@ -5,10 +5,12 @@ import os
 
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
 
-# SQLite serialises writes, so many processes contend on the same file. Two
-# workers with a thread pool each gives concurrency for read-heavy AI endpoints
-# without multiplying write contention.
-workers = int(os.environ.get("WEB_CONCURRENCY", min(2, multiprocessing.cpu_count())))
+# The old limit of two workers existed because SQLite serialises writes and
+# more processes only contended over one file. MySQL has no such ceiling, so
+# this now follows the usual (2 x cores) + 1 -- capped, because each worker
+# holds its own connection and the server's max_connections is finite.
+workers = int(os.environ.get("WEB_CONCURRENCY",
+                             min(9, multiprocessing.cpu_count() * 2 + 1)))
 threads = int(os.environ.get("WEB_THREADS", 4))
 worker_class = "gthread"
 

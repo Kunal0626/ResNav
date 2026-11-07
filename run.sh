@@ -19,6 +19,9 @@
 #   web      run the Vite development server (http://localhost:5173)
 #   test     run the backend test suite and the SQL tests
 #   concurrency  two-session race, isolation and deadlock experiments
+#   db-local verify the local MySQL, then build and seed it
+#   docker   build and run the whole stack in containers
+#   docker-down  stop it (add -v to drop the database volume too)
 #   lint     ruff over the backend, eslint over the frontend
 #   build    production build of the frontend
 #   demo     the end-to-end worked demo
@@ -440,7 +443,72 @@ target_seed() {
 target_reset() {
   target_schema && echo && target_seed
 }
-target_demo()   { not_yet demo 8; }
+# ── Running the whole stack ─────────────────────────────────────────────────
+
+# The local path: a MySQL server you already run, no containers. This is what
+# the project is developed against and what every measurement in the docs was
+# taken on.
+target_db_local() {
+  target_check >/dev/null || { echo "error: ./run.sh check failed; fix that first" >&2; return 1; }
+  target_reset
+}
+
+# The container path: MySQL, the API and the built SPA, all isolated.
+# Docker Desktop installs its CLI in ~/.docker/bin and only adds it to PATH
+# for shells started AFTER the install, so a freshly installed Docker is
+# routinely invisible to the terminal that is already open. Same failure the
+# nvm lookup above exists for: resolve it rather than tell the user their
+# install is broken.
+DOCKER_BIN=""
+find_docker() {
+  [[ -n "$DOCKER_BIN" ]] && return 0
+  if command -v docker >/dev/null 2>&1; then DOCKER_BIN="$(command -v docker)"; return 0; fi
+  local candidate
+  for candidate in "$HOME/.docker/bin/docker" \
+                   /usr/local/bin/docker \
+                   /opt/homebrew/bin/docker \
+                   "/Applications/Docker.app/Contents/Resources/bin/docker"; do
+    if [[ -x "$candidate" ]]; then
+      PATH="$(dirname "$candidate"):$PATH"; export PATH
+      DOCKER_BIN="$candidate"
+      return 0
+    fi
+  done
+  cat >&2 <<'MSG'
+error: docker not found.
+
+Checked PATH, ~/.docker/bin, /usr/local/bin, /opt/homebrew/bin and
+Docker.app. The container stack needs Docker Desktop running.
+
+The local path needs nothing but the MySQL server you already have:
+
+    ./run.sh install
+    ./run.sh db-local
+    ./run.sh api        # and ./run.sh web in a second terminal
+MSG
+  return 1
+}
+
+target_docker() {
+  find_docker || return 1
+  if ! "$DOCKER_BIN" info >/dev/null 2>&1; then
+    echo "error: Docker is installed but the daemon is not responding." >&2
+    echo "       Start Docker Desktop and wait for the whale to settle." >&2
+    return 1
+  fi
+  [[ -f .env ]] || { echo "error: .env not found. cp .env.example .env" >&2; return 1; }
+  echo "==> building and starting mysql + api + web"
+  "$DOCKER_BIN" compose up --build "$@"
+}
+
+# Tear the stack down. `down -v` also drops the database volume, which is how
+# you re-run the one-time schema initialisation.
+target_docker_down() {
+  find_docker || return 1
+  "$DOCKER_BIN" compose down "$@"
+}
+
+target_demo()   { not_yet demo 9; }
 
 usage() {
   # Print the Usage block from this file's own header, so the help text and
@@ -469,6 +537,9 @@ main() {
     build)   target_build ;;
     demo)    target_demo ;;
     concurrency) target_concurrency "$@" ;;
+    db-local) target_db_local ;;
+    docker)  target_docker "$@" ;;
+    docker-down) target_docker_down "$@" ;;
     shell)   target_shell "$@" ;;
     ""|-h|--help|help) usage ;;
     *) echo "error: unknown target '${target}'" >&2; echo >&2; usage ;;

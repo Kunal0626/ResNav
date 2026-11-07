@@ -19,14 +19,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Run as a non-root user, and give it ownership of the writable data directory.
+# Run as a non-root user. There is no writable data directory to own now --
+# the SQLite file it used to need is gone, which is one fewer volume to get
+# wrong on a deploy.
 RUN useradd --create-home --shell /usr/sbin/nologin resnav \
-    && mkdir -p /data \
-    && chown -R resnav:resnav /app /data
+    && chown -R resnav:resnav /app
 USER resnav
 
-ENV DATABASE_PATH=/data/resource_navigator.db \
-    PORT=8000
+# No DATABASE_PATH any more: the database is a server, reached over the
+# network, and its address arrives through DRA_MYSQL_* at run time.
+ENV PORT=8000
 
 EXPOSE 8000
 

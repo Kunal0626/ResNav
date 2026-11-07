@@ -52,7 +52,7 @@ README, kept for provenance — treat its claims as unverified unless
 | 5 | One deterministic seed, plus a tiny hand-checkable set | **done** — `make reset` |
 | 6 | Concurrency proof: oversell, isolation levels, deadlock | **done** — [`CONCURRENCY.md`](docs/CONCURRENCY.md) |
 | 7 | Surface alerts, audit log and "why this centre" in the UI | **done** — [screenshots](docs/screenshots/) |
-| 8 | Run anywhere: Docker and a no-Docker local path | not started |
+| 8 | Run anywhere: Docker and a no-Docker local path | **done** — both tested |
 | 9 | Measure, rewrite this README, interview notes | not started |
 
 ## Layout
@@ -140,6 +140,35 @@ Your MySQL password is never put on a command line. `run.sh` writes a
 `chmod 600` temporary defaults file and passes `--defaults-extra-file`, so the
 password stays out of `ps` output and shell history.
 
+### Two ways to run it
+
+**Containers** — nothing on your machine but Docker:
+
+```bash
+cp .env.example .env && chmod 600 .env   # set DRA_MYSQL_PASSWORD and SECRET_KEY
+make docker
+```
+
+That builds MySQL, the API and the SPA behind nginx, applies the schema and
+the seed on first start, and serves the app at **http://localhost:8080**.
+`make docker-down` stops it; add `-v` to drop the database volume so the
+schema initialisation runs again.
+
+The container runs **MySQL 8.4**, which is what finally *tests* this
+project's "8.0.16+" claim rather than asserting it — development is on 9.5.0.
+Same triggers, same `CHECK` errors, same `fn_haversine_km` result to three
+decimal places.
+
+**Locally** — against a MySQL server you already run, which is what the
+project is developed against and what every measurement in the docs was
+taken on:
+
+```bash
+make install
+make db-local     # verifies the server, then builds and seeds it
+make api          # and `make web` in a second terminal
+```
+
 ### Running it
 
 ```bash
@@ -160,6 +189,8 @@ password stays out of `ps` output and shell history.
 | `build` | production frontend build | yes |
 | `api` / `web` | development servers | yes |
 | `schema` | create tables, triggers, procedures, views | yes |
+| `db-local` | verify the local MySQL, then build and seed it | yes |
+| `docker` / `docker-down` | the whole stack in containers | yes |
 | `seed` / `reset` | load sample data / rebuild everything | yes |
 | `demo` | end-to-end worked demo | **no** — Phase 8 |
 
@@ -194,11 +225,11 @@ Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
 - **Semantic search is weak** on the very example the old README led with —
   the semantic term contributes ~0.07 while proximity contributes 1.00. The
   ranking is real and explainable; the signal is not yet good.
-- **`docker-compose.yml` is the old SQLite stack and has never been run.**
-  Docker is not installed on the development machine. Rewritten in Phase 8.
+
 - **`npm audit` reports high and moderate vulnerabilities**, not yet triaged.
 - **No authentication.** Every caller can allocate.
-- **No deployment.** Nothing has been deployed anywhere.
+- **No deployment.** Nothing has been deployed anywhere. The container
+  stack runs locally; no hosting provider has been configured or paid for.
 
 ## Licence
 
