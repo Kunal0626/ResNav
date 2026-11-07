@@ -45,7 +45,7 @@ export function AppShell() {
   }, [location.pathname]);
 
   return (
-    <div className="mesh-bg min-h-screen text-sand-600 antialiased dark:text-neutral-200">
+    <div className="mesh-bg min-h-screen text-[var(--rn-text)] antialiased">
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
@@ -53,7 +53,7 @@ export function AppShell() {
       <div className="layout-wrapper">
         {navOpen && !isDesktop ? (
           <div
-            className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+            className="fixed inset-0 z-[35] bg-black/25 backdrop-blur-sm lg:hidden"
             onClick={closeNav}
             aria-hidden="true"
           />
@@ -62,28 +62,29 @@ export function AppShell() {
         <Sidebar open={navOpen || isDesktop} onClose={closeNav} status={status} />
 
         <div className="main-scroll-area">
-          <header className="glass-header sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 px-4 sm:px-6 lg:justify-end">
+          <header className="glass-header flex shrink-0 items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => setNavOpen(true)}
-              className="-ml-2 rounded-lg p-2 text-sand-400 hover:text-sand-600 dark:text-neutral-500 dark:hover:text-neutral-200 lg:hidden"
+              className="g-icon-btn lg:hidden"
               aria-label="Open navigation"
               aria-expanded={navOpen}
               aria-controls="sidebar"
             >
-              <Icon name="menu" className="h-5 w-5" />
+              <Icon name="menu" className="h-[18px] w-[18px]" />
             </button>
 
-            <div className="flex items-center gap-3">
-              <SystemPill status={status} />
+            <Breadcrumb />
 
+            <div className="flex items-center gap-2.5">
+              <SystemPill status={status} />
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-sand-200 text-sand-400 transition-colors hover:bg-sand-200/50 dark:border-neutral-750 dark:text-neutral-500 dark:hover:bg-neutral-750/50"
+                className="g-icon-btn"
                 aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
               >
-                <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="h-4 w-4" />
+                <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="h-[18px] w-[18px]" />
               </button>
             </div>
           </header>
@@ -93,7 +94,7 @@ export function AppShell() {
             tabIndex={-1}
             className="w-full flex-1 pb-12 focus:outline-none"
           >
-            <div className="page-fade-in mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8">
+            <div className="page-fade-in mx-auto w-full max-w-[1340px] px-4 pt-6 sm:px-6 lg:pr-8 lg:pl-2">
               <Outlet />
             </div>
           </main>
@@ -104,6 +105,36 @@ export function AppShell() {
     </div>
   );
 }
+
+/** Where you are, in the header, so the floating sidebar is not the only
+ *  thing telling you. Derived from the route rather than threaded through
+ *  props, which keeps every page free of layout concerns. */
+function Breadcrumb() {
+  const { pathname } = useLocation();
+  const name = pathname === '/' ? 'Overview' : LABELS[pathname.slice(1)] ?? 'ResNav';
+  return (
+    <p className="hidden flex-1 truncate pl-1 text-[0.8125rem] font-medium text-[var(--rn-text-2)] lg:block">
+      {name}
+    </p>
+  );
+}
+
+const LABELS = {
+  results: 'Search Results',
+  'command-center': 'AI Command Center',
+  insights: 'AI Insights',
+  forecast: 'Depletion Forecast',
+  risk: 'Zone Risk Prediction',
+  recommend: 'Recommendation Engine',
+  simulation: 'Simulation Lab',
+  nlp: 'NLP Console',
+  anomaly: 'Anomaly Detection',
+  explorer: 'Data Explorer',
+  requests: 'Resource Requests',
+  stock: 'Live Stock',
+  allocations: 'Allocation History',
+  logs: 'System Logs',
+};
 
 function SystemPill({ status }) {
   const level = status?.level ?? 'nominal';

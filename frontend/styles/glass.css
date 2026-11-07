@@ -1,0 +1,1168 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ResNav — Liquid Glass
+   ───────────────────────────────────────────────────────────────────────────
+   Loaded last, so it owns the material layer. It redefines the --rn-* tokens
+   the pages already consume, which is why fifteen routes change appearance
+   without any of them being rewritten.
+
+   The idea behind the whole thing: glass is only convincing if there is
+   something behind it worth refracting, and if light appears to come from a
+   consistent direction. So there is a living background field, every surface
+   carries a specular edge that is brightest where the light would hit it,
+   and depth is built from layered shadow rather than from borders.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  /* ── Monochrome ──────────────────────────────────────────────────────────
+     No hue anywhere. Every distinction in this interface is made with
+     luminance, weight, fill and shape instead.
+
+     That is a real constraint, not a coat of paint: a relief console is
+     mostly states -- critical, short, healthy, overdue -- and those are
+     normally carried by red, amber and green. Doing without means each
+     state needs a non-colour signal that survives a greyscale print, a
+     cheap projector, and the eight percent of men with a colour vision
+     deficiency. The ramp below pairs every level with a FILL DENSITY and a
+     SHAPE so the hue was never the information.
+     ──────────────────────────────────────────────────────────────────────── */
+
+  --rn-bg:          #f2f2f2;
+  --rn-surface:     rgba(255, 255, 255, 0.82);
+  --rn-card-bg:     rgba(255, 255, 255, 0.62);
+  --rn-card-border: rgba(255, 255, 255, 0.80);
+  --rn-border:      rgba(0, 0, 0, 0.10);
+  --rn-text:        #000000;
+  --rn-text-2:      rgba(0, 0, 0, 0.62);
+  --rn-text-3:      rgba(0, 0, 0, 0.42);
+
+  --g-rim-strong: rgba(255, 255, 255, 1);
+  --g-rim-soft:   rgba(255, 255, 255, 0.34);
+  --g-rim-none:   rgba(255, 255, 255, 0);
+
+  --g-fill-1: rgba(255, 255, 255, 0.66);
+  --g-fill-2: rgba(255, 255, 255, 0.38);
+  --g-fill-3: rgba(0, 0, 0, 0.04);
+  --g-fill-chrome: rgba(255, 255, 255, 0.72);
+  --g-inner-shadow: rgba(0, 0, 0, 0.06);
+
+  --g-blur:      28px;
+  --g-blur-deep: 44px;
+  /* Saturation stays at 100%: boosting it is what makes glass look colourful,
+     which is exactly what this scheme is not. */
+  --g-sat:       100%;
+
+  --g-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 8px 24px -8px rgba(0, 0, 0, 0.10),
+    0 24px 64px -24px rgba(0, 0, 0, 0.14);
+  --g-shadow-lift:
+    0 1px 1px rgba(0, 0, 0, 0.05),
+    0 16px 40px -12px rgba(0, 0, 0, 0.16),
+    0 40px 90px -32px rgba(0, 0, 0, 0.22);
+  --g-shadow-float:
+    0 2px 4px rgba(0, 0, 0, 0.06),
+    0 20px 48px -12px rgba(0, 0, 0, 0.18),
+    0 48px 110px -40px rgba(0, 0, 0, 0.26);
+
+  /* The accent is maximum contrast, not a colour. */
+  --g-accent:      #000000;
+  --g-accent-2:    #2b2b2b;
+  --g-accent-ink:  #ffffff;
+  --g-accent-glow: rgba(0, 0, 0, 0.10);
+
+  /* States, by luminance. Critical is full contrast and gets heavier type;
+     each step down is both lighter and less filled. */
+  --s-critical: #000000;
+  --s-warning:  rgba(0, 0, 0, 0.72);
+  --s-good:     rgba(0, 0, 0, 0.46);
+  --s-info:     rgba(0, 0, 0, 0.58);
+  --s-critical-bg: rgba(0, 0, 0, 0.12);
+  --s-warning-bg:  rgba(0, 0, 0, 0.07);
+  --s-good-bg:     rgba(0, 0, 0, 0.04);
+  --s-info-bg:     rgba(0, 0, 0, 0.05);
+
+  --g-r-xl: 24px;
+  --g-r-lg: 16px;
+  --g-r-md: 11px;
+  --g-r-sm: 8px;
+
+  --g-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --g-snap:   cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --rn-bg:          #000000;
+  --rn-surface:     rgba(255, 255, 255, 0.08);
+  --rn-card-bg:     rgba(255, 255, 255, 0.05);
+  --rn-card-border: rgba(255, 255, 255, 0.12);
+  --rn-border:      rgba(255, 255, 255, 0.12);
+  --rn-text:        #ffffff;
+  --rn-text-2:      rgba(255, 255, 255, 0.66);
+  --rn-text-3:      rgba(255, 255, 255, 0.44);
+
+  --g-rim-strong: rgba(255, 255, 255, 0.42);
+  --g-rim-soft:   rgba(255, 255, 255, 0.10);
+  --g-rim-none:   rgba(255, 255, 255, 0);
+
+  --g-fill-1: rgba(255, 255, 255, 0.07);
+  --g-fill-2: rgba(255, 255, 255, 0.04);
+  --g-fill-3: rgba(255, 255, 255, 0.03);
+  --g-fill-chrome: rgba(255, 255, 255, 0.08);
+  --g-inner-shadow: rgba(0, 0, 0, 0.40);
+
+  --g-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.50),
+    0 8px 24px -8px rgba(0, 0, 0, 0.70),
+    0 24px 64px -24px rgba(0, 0, 0, 0.85);
+  --g-shadow-lift:
+    0 1px 1px rgba(0, 0, 0, 0.55),
+    0 16px 40px -12px rgba(0, 0, 0, 0.78),
+    0 40px 90px -32px rgba(0, 0, 0, 0.92);
+  --g-shadow-float:
+    0 2px 4px rgba(0, 0, 0, 0.60),
+    0 20px 48px -12px rgba(0, 0, 0, 0.80),
+    0 48px 110px -40px rgba(0, 0, 0, 0.95);
+
+  --g-accent:      #ffffff;
+  --g-accent-2:    #d4d4d4;
+  --g-accent-ink:  #000000;
+  --g-accent-glow: rgba(255, 255, 255, 0.14);
+
+  --s-critical: #ffffff;
+  --s-warning:  rgba(255, 255, 255, 0.76);
+  --s-good:     rgba(255, 255, 255, 0.48);
+  --s-info:     rgba(255, 255, 255, 0.60);
+  --s-critical-bg: rgba(255, 255, 255, 0.16);
+  --s-warning-bg:  rgba(255, 255, 255, 0.09);
+  --s-good-bg:     rgba(255, 255, 255, 0.05);
+  --s-info-bg:     rgba(255, 255, 255, 0.06);
+}
+
+/* ── Typography ──────────────────────────────────────────────────────────── */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  /* SF on Apple hardware, a sane cascade everywhere else. */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-feature-settings: 'ss01', 'cv01', 'tnum' 0;
+  background: var(--rn-bg);
+  color: var(--rn-text);
+}
+
+h1, h2, h3, .g-display {
+  letter-spacing: -0.022em;
+}
+h1, .g-display {
+  letter-spacing: -0.032em;
+}
+.tabular-nums, .font-mono, td, th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The background field ────────────────────────────────────────────────── */
+/* Four colour blooms drifting at different speeds. They are what the glass
+   has to refract: against a flat fill, blur does nothing visible. */
+
+.mesh-bg {
+  position: relative;
+  background: var(--rn-bg);
+  isolation: isolate;
+}
+
+.mesh-bg::before,
+.mesh-bg::after {
+  content: '';
+  position: fixed;
+  inset: -30vmax;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.mesh-bg::before {
+  background:
+    radial-gradient(44vmax 44vmax at 10% 6%,  rgba(0, 0, 0, 0.10), transparent 62%),
+    radial-gradient(40vmax 40vmax at 90% 12%, rgba(0, 0, 0, 0.07), transparent 60%),
+    radial-gradient(48vmax 48vmax at 74% 90%, rgba(0, 0, 0, 0.08), transparent 62%),
+    radial-gradient(32vmax 32vmax at 20% 84%, rgba(0, 0, 0, 0.05), transparent 58%);
+  filter: blur(28px);
+  animation: g-drift 46s var(--g-spring) infinite alternate;
+}
+
+.dark .mesh-bg::before {
+  background:
+    radial-gradient(46vmax 46vmax at 8% 4%,   rgba(255, 255, 255, 0.10), transparent 60%),
+    radial-gradient(42vmax 42vmax at 92% 10%, rgba(255, 255, 255, 0.06), transparent 58%),
+    radial-gradient(50vmax 50vmax at 78% 92%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(34vmax 34vmax at 16% 88%, rgba(255, 255, 255, 0.04), transparent 56%);
+}
+
+/* A fine grain over the whole field. Pure gradients band visibly on wide
+   gamut displays; noise hides it and is what makes the blur look like
+   frosted glass rather than a Gaussian filter. */
+.mesh-bg::after {
+  z-index: -1;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+.dark .mesh-bg::after { opacity: 0.22; }
+
+@keyframes g-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%, 2.5%, 0) scale(1.02); }
+}
+
+/* ── The material ────────────────────────────────────────────────────────── */
+
+.g-surface,
+.dash-card,
+.glass-header,
+.sidebar-fixed {
+  position: relative;
+  background-image: linear-gradient(160deg, var(--g-fill-1), var(--g-fill-2));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat));
+  border: 0;
+  box-shadow: var(--g-shadow), inset 0 -1px 2px var(--g-inner-shadow);
+}
+
+/* The specular rim. A plain 1px border is uniform, which is exactly what real
+   glass is not: the edge catches light where it faces the source and
+   disappears where it turns away. Painted as a masked gradient so it can vary
+   around the perimeter. */
+.g-surface::before,
+.dash-card::before,
+.glass-header::before,
+.sidebar-fixed::before,
+.g-rim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    150deg,
+    var(--g-rim-strong) 0%,
+    var(--g-rim-soft) 26%,
+    var(--g-rim-none) 52%,
+    var(--g-rim-soft) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+.dash-card {
+  border-radius: var(--g-r-xl);
+  transition:
+    transform 0.5s var(--g-spring),
+    box-shadow 0.5s var(--g-spring);
+}
+
+.dash-card > * { position: relative; z-index: 1; }
+
+/* Lift on hover, but only for cards that are actually interactive. A static
+   panel that rises when the pointer crosses it is noise. */
+a .dash-card:hover,
+button .dash-card:hover,
+.dash-card[data-interactive='true']:hover {
+  transform: translate3d(0, -3px, 0);
+  box-shadow: var(--g-shadow-lift), inset 0 -1px 2px var(--g-inner-shadow);
+}
+
+/* A thinner material for panels nested inside glass. Stacking the full
+   material twice turns the inner one opaque and muddy. */
+.g-thin {
+  position: relative;
+  background: var(--g-fill-2);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--rn-border);
+  border-radius: var(--g-r-lg);
+}
+
+/* ── Shell: floating islands rather than docked chrome ───────────────────── */
+
+.layout-wrapper {
+  display: block;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.sidebar-fixed {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  bottom: 16px;
+  width: 248px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--g-r-xl);
+  backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  -webkit-backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  box-shadow: var(--g-shadow-float), inset 0 -1px 2px var(--g-inner-shadow);
+  overflow: hidden;
+  transform: none;
+  transition: transform 0.5s var(--g-snap), opacity 0.3s ease;
+}
+
+.sidebar-fixed > * { position: relative; z-index: 1; }
+
+.main-scroll-area {
+  margin-left: 280px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.glass-header {
+  position: sticky;
+  top: 16px;
+  z-index: 30;
+  margin: 16px 16px 0 0;
+  height: 52px;
+  border-radius: 999px;
+  padding-inline: 8px 14px;
+  backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  -webkit-backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  box-shadow: var(--g-shadow-float), inset 0 -1px 2px var(--g-inner-shadow);
+}
+.glass-header > * { position: relative; z-index: 1; }
+
+@media (max-width: 1023px) {
+  .sidebar-fixed {
+    width: min(84vw, 300px);
+    transform: translate3d(calc(-100% - 24px), 0, 0);
+  }
+  .sidebar-fixed[data-open='true'] { transform: translate3d(0, 0, 0); }
+  .main-scroll-area { margin-left: 0; }
+  .glass-header { margin: 12px; }
+}
+
+/* ── Navigation ──────────────────────────────────────────────────────────── */
+
+.sidebar-section-title {
+  padding: 18px 20px 6px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rn-text-3);
+}
+
+.nav-link,
+a[class*='nav-'],
+.sidebar-fixed nav a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 2px 10px;
+  padding: 9px 12px;
+  border-radius: var(--g-r-md);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rn-text-2);
+  transition:
+    color 0.25s var(--g-spring),
+    background-color 0.25s var(--g-spring),
+    transform 0.25s var(--g-spring);
+}
+
+.sidebar-fixed nav a:hover {
+  color: var(--rn-text);
+  background: var(--g-fill-2);
+}
+.sidebar-fixed nav a:active { transform: scale(0.985); }
+
+/* The active pill: a tinted glass lozenge with its own rim and a glow, so the
+   current page reads at a glance without a heavy filled block. */
+.sidebar-fixed nav a[aria-current='page'] {
+  color: var(--rn-text);
+  background:
+    linear-gradient(140deg, var(--g-accent-glow), transparent 70%),
+    var(--g-fill-1);
+  box-shadow:
+    inset 0 1px 0 var(--g-rim-strong),
+    0 4px 14px -6px var(--g-accent-glow);
+}
+.sidebar-fixed nav a[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(var(--g-accent), var(--g-accent-2));
+  transform: translateY(-50%);
+  box-shadow: 0 0 12px var(--g-accent-glow);
+}
+
+/* ── Controls ────────────────────────────────────────────────────────────── */
+
+.rn-btn {
+  position: relative;
+  border-radius: var(--g-r-md);
+  font-weight: 550;
+  letter-spacing: -0.005em;
+  transition:
+    transform 0.22s var(--g-spring),
+    box-shadow 0.3s var(--g-spring),
+    background-color 0.25s var(--g-spring),
+    color 0.25s var(--g-spring);
+}
+.rn-btn:active:not(:disabled) { transform: scale(0.96); }
+
+.rn-btn-primary,
+.rn-btn-ai {
+  background-image: linear-gradient(140deg, var(--g-accent), var(--g-accent-2));
+  color: var(--g-accent-ink);
+  border: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 10px 26px -10px var(--g-accent-glow);
+}
+.rn-btn-primary:hover:not(:disabled),
+.rn-btn-ai:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 2px 4px rgba(0, 0, 0, 0.18),
+    0 16px 36px -10px var(--g-accent-glow);
+  filter: brightness(1.06);
+}
+
+.rn-btn-ghost,
+.rn-btn-danger,
+.rn-btn:not(.rn-btn-primary):not(.rn-btn-ai) {
+  background: var(--g-fill-2);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid var(--rn-border);
+  color: var(--rn-text-2);
+}
+.rn-btn-ghost:hover:not(:disabled),
+.rn-btn:not(.rn-btn-primary):not(.rn-btn-ai):hover:not(:disabled) {
+  background: var(--g-fill-1);
+  color: var(--rn-text);
+  box-shadow: var(--g-shadow);
+}
+/* Destructive actions are marked by weight and an outline, since red is
+   not available to mean danger here. */
+.rn-btn-danger { color: var(--rn-text); border-color: var(--rn-text-3); font-weight: 650; }
+
+
+input, select, textarea, .rn-input {
+  border-radius: var(--g-r-md) !important;
+  background: var(--g-fill-2) !important;
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid var(--rn-border) !important;
+  color: var(--rn-text) !important;
+  transition: border-color 0.25s var(--g-spring), box-shadow 0.25s var(--g-spring),
+    background-color 0.25s var(--g-spring);
+}
+input::placeholder, textarea::placeholder { color: var(--rn-text-3); }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--g-accent) 60%, transparent) !important;
+  background: var(--g-fill-1) !important;
+  box-shadow: 0 0 0 4px var(--g-accent-glow);
+}
+
+/* Focus visible everywhere, because a glass interface with no focus ring is
+   unusable from the keyboard. */
+:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+  border-radius: var(--g-r-sm);
+}
+
+/* ── Badges, pills, progress ─────────────────────────────────────────────── */
+
+.badge {
+  border-radius: 999px;
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  border: 1px solid var(--rn-border);
+  font-weight: 550;
+  letter-spacing: 0.002em;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  color: var(--rn-text-2);
+  background: var(--g-fill-2);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid var(--rn-border);
+}
+
+.pulse { animation: g-pulse 2.4s ease-in-out infinite; }
+@keyframes g-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 currentColor; }
+  50%      { opacity: 0.6; box-shadow: 0 0 0 4px transparent; }
+}
+
+progress, .progress-track {
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+
+table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--g-fill-1);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rn-text-3);
+}
+table tbody tr {
+  transition: background-color 0.2s var(--g-spring);
+}
+table tbody tr:hover { background: var(--g-fill-2); }
+
+/* ── Page transition ─────────────────────────────────────────────────────── */
+
+.page-fade-in {
+  animation: g-enter 0.55s var(--g-spring) both;
+}
+/* NO `filter` in here, however tempting a blur-in looks.
+   An element with a filter becomes a BACKDROP ROOT: every backdrop-filter
+   inside it then samples that element's own content instead of the page
+   behind it. Animating `filter` on the page wrapper therefore switched off
+   the glass on every panel it contained -- the sidebar, which sits outside
+   the wrapper, kept working, which is what made it look like a contrast
+   problem rather than a stacking one. Opacity and transform are free. */
+@keyframes g-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Stagger the first few panels so a page assembles rather than appearing. */
+.page-fade-in > * > .dash-card:nth-child(1) { animation: g-enter 0.5s var(--g-spring) 0.02s both; }
+.page-fade-in > * > .dash-card:nth-child(2) { animation: g-enter 0.5s var(--g-spring) 0.06s both; }
+.page-fade-in > * > .dash-card:nth-child(3) { animation: g-enter 0.5s var(--g-spring) 0.10s both; }
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+
+* { scrollbar-width: thin; scrollbar-color: var(--rn-text-3) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--g-fill-1);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--rn-text-3); background-clip: content-box; }
+
+/* ── Honest degradation ──────────────────────────────────────────────────── */
+
+/* Without backdrop-filter the panels would be near-transparent and the text
+   unreadable, so fall back to a solid surface rather than a broken one. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .g-surface, .dash-card, .glass-header, .sidebar-fixed {
+    background: var(--rn-surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+.mesh-bg::before { animation: none; }
+  .page-fade-in,
+  .page-fade-in > * > .dash-card { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* Blur is expensive. On a coarse pointer -- phones, where it costs most and
+   shows least -- halve the radius rather than drop the effect. */
+@media (pointer: coarse) {
+  :root { --g-blur: 18px; --g-blur-deep: 26px; }
+}
+
+/* ── Pieces the shell introduces ─────────────────────────────────────────── */
+
+/* The brand mark. A gradient chip with an inner highlight, so it reads as a
+   small physical object rather than a coloured square. */
+.g-mark {
+  display: flex;
+  height: 34px;
+  width: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  color: #fff;
+  background:
+    linear-gradient(145deg, var(--g-accent) 0%, var(--g-accent-2) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.18),
+    0 4px 14px -4px var(--g-accent-glow);
+  transition: transform 0.4s var(--g-spring), box-shadow 0.4s var(--g-spring);
+}
+.group:hover .g-mark {
+  transform: translateY(-1px) scale(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 22px -4px var(--g-accent-glow);
+}
+
+/* Round icon buttons for the header. 36px, which is the smallest comfortable
+   pointer target that still looks delicate at this scale. */
+.g-icon-btn {
+  display: inline-flex;
+  height: 36px;
+  width: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--rn-text-2);
+  background: var(--g-fill-2);
+  border: 1px solid var(--rn-border);
+  transition:
+    transform 0.25s var(--g-spring),
+    background-color 0.25s var(--g-spring),
+    color 0.25s var(--g-spring),
+    box-shadow 0.25s var(--g-spring);
+}
+.g-icon-btn:hover {
+  color: var(--rn-text);
+  background: var(--g-fill-1);
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.30);
+}
+.g-icon-btn:active { transform: scale(0.92); }
+
+/* ── Card interior ───────────────────────────────────────────────────────── */
+
+/* Hairline dividers read as grey lines on glass. A gradient that fades at
+   both ends sits on the surface instead of cutting through it. */
+.dash-card [class*='border-b'],
+.dash-card [class*='border-t'] {
+  border-color: transparent !important;
+  position: relative;
+}
+.dash-card > div[class*='border-b']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--rn-border) 12%,
+    var(--rn-border) 88%,
+    transparent
+  );
+}
+
+/* Tables sit flush inside the card's radius. */
+.dash-card table { border-collapse: separate; border-spacing: 0; }
+.dash-card table tbody tr td { border-top: 1px solid var(--rn-border); }
+.dash-card table tbody tr:first-child td { border-top: 0; }
+table th, table td { padding: 11px 16px; }
+
+/* ── Metric tiles ────────────────────────────────────────────────────────── */
+/* The overview's KPI row is the first thing anyone sees, so it gets the
+   fullest treatment: a tinted bloom behind the glass that brightens on
+   hover, as if the tile were lit from within. */
+
+.kpi-card, [class*='kpi'] > .dash-card {
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: -40% -40% auto auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--g-accent-glow), transparent 68%);
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.5s var(--g-spring), transform 0.6s var(--g-spring);
+}
+.kpi-card:hover::after { opacity: 0.85; transform: scale(1.12); }
+
+/* ── Dialogs ─────────────────────────────────────────────────────────────── */
+
+[role='dialog'] {
+  border-radius: var(--g-r-xl) !important;
+  background-image: linear-gradient(160deg, var(--g-fill-1), var(--g-fill-2)) !important;
+  backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  -webkit-backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  border: 1px solid var(--rn-card-border) !important;
+  box-shadow: var(--g-shadow-float) !important;
+  animation: g-dialog 0.42s var(--g-spring) both;
+}
+@keyframes g-dialog {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Toasts ──────────────────────────────────────────────────────────────── */
+
+[class*='toast'] {
+  border-radius: var(--g-r-lg) !important;
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: var(--g-shadow-float) !important;
+}
+
+/* ── Skip link ───────────────────────────────────────────────────────────── */
+
+.skip-link:focus-visible {
+  border-radius: var(--g-r-md);
+  background: var(--g-accent);
+  color: var(--g-accent-ink);
+  box-shadow: var(--g-shadow-float);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Typography, rhythm and semantics
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scale ───────────────────────────────────────────────────────────────── */
+/* A real modular scale rather than whatever Tailwind step was nearest. The
+   jumps are large at the top and small at the bottom, which is what makes a
+   page feel composed instead of uniformly medium-sized. */
+
+:root {
+  --t-display: clamp(2rem, 1.3rem + 2.2vw, 3rem);
+  --t-h1:      clamp(1.5rem, 1.15rem + 1.1vw, 2rem);
+  --t-h2:      1.0625rem;
+  --t-body:    0.875rem;
+  --t-small:   0.8125rem;
+  --t-micro:   0.6875rem;
+}
+
+.g-display {
+  font-size: var(--t-display);
+  line-height: 1.04;
+  letter-spacing: -0.038em;
+  font-weight: 600;
+}
+
+/* Eyebrows: the small capitalised label above a heading. Wide tracking is
+   what stops them reading as shouting. */
+.g-eyebrow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rn-text-3);
+}
+
+/* Big numbers are the point of this interface, so they get optical treatment
+   the body text does not: tabular figures, tight tracking, and a weight that
+   holds at size. */
+.kpi-value {
+  font-size: clamp(1.75rem, 1.4rem + 1.1vw, 2.375rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--rn-text);
+}
+.kpi-label {
+  margin-top: 7px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--rn-text-3);
+}
+
+p { text-wrap: pretty; }
+h1, h2, h3, .g-display { text-wrap: balance; }
+
+/* ── Semantic colour ─────────────────────────────────────────────────────── */
+/* Everything coloured in this interface is a STATE. Mapping Tailwind's
+   palette classes onto the semantic tokens means the pages keep their
+   existing markup while the meaning, not the hue, decides the colour. */
+
+.text-red-500, .text-rose-500, [class*='text-red-'] { color: var(--s-critical) !important; }
+.text-amber-500, [class*='text-amber-'], [class*='text-orange-'] { color: var(--s-warning) !important; }
+.text-emerald-500, [class*='text-emerald-'], [class*='text-green-'] { color: var(--s-good) !important; }
+.text-blue-500, [class*='text-blue-'], [class*='text-cyan-'] { color: var(--s-info) !important; }
+.text-indigo-500, .text-violet-500, .text-purple-500,
+[class*='text-indigo-'], [class*='text-violet-'], [class*='text-purple-'] {
+  color: var(--g-accent) !important;
+}
+
+.bg-red-500\/10, [class*='bg-red-500/'] { background-color: var(--s-critical-bg) !important; }
+[class*='bg-amber-500/'], [class*='bg-orange-500/'] { background-color: var(--s-warning-bg) !important; }
+[class*='bg-emerald-500/'], [class*='bg-green-500/'] { background-color: var(--s-good-bg) !important; }
+[class*='bg-blue-500/'], [class*='bg-cyan-500/'] { background-color: var(--s-info-bg) !important; }
+[class*='bg-indigo-500/'], [class*='bg-violet-500/'], [class*='bg-purple-500/'] {
+  background-color: var(--g-accent-glow) !important;
+}
+
+/* Status dots keep their own fills, since a dot IS its colour. */
+.bg-emerald-500 { background-color: var(--s-good) !important; }
+.bg-amber-500   { background-color: var(--s-warning) !important; }
+.bg-red-500     { background-color: var(--s-critical) !important; }
+.bg-indigo-500  { background-color: var(--g-accent) !important; }
+
+/* Badges inherit the same ramp. */
+.badge-emerald, .badge-green { color: var(--s-good); background: var(--s-good-bg); border-color: transparent; }
+.badge-amber, .badge-orange  { color: var(--s-warning); background: var(--s-warning-bg); border-color: transparent; }
+.badge-red, .badge-rose      { color: var(--s-critical); background: var(--s-critical-bg); border-color: transparent; }
+.badge-blue, .badge-cyan     { color: var(--s-info); background: var(--s-info-bg); border-color: transparent; }
+.badge-indigo, .badge-violet, .badge-purple {
+  color: var(--g-accent); background: var(--g-accent-glow); border-color: transparent;
+}
+.badge-slate { color: var(--rn-text-2); background: var(--g-fill-2); }
+
+/* The KPI icon chip. */
+.kpi-icon {
+  display: inline-flex;
+  height: 32px;
+  width: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid var(--rn-border);
+}
+
+/* ── The hero ────────────────────────────────────────────────────────────── */
+/* The first thing anyone sees, so it gets more room and a deeper material
+   than the panels below it -- the page should have a clear top note rather
+   than fifteen equal cards. */
+
+.page-hero {
+  border-radius: var(--g-r-xl);
+  backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  -webkit-backdrop-filter: blur(var(--g-blur-deep)) saturate(var(--g-sat));
+  box-shadow: var(--g-shadow-float), inset 0 -1px 2px var(--g-inner-shadow);
+  overflow: hidden;
+}
+.page-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -10% -70% auto;
+  width: 520px;
+  height: 520px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--g-accent-glow), transparent 66%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ── Section rhythm ──────────────────────────────────────────────────────── */
+/* Uniform gaps make every section look equally important. Slightly larger
+   gaps between groups than within them is what creates reading order. */
+
+main .space-y-6 > * + * { margin-top: 22px; }
+main .grid { gap: 18px; }
+@media (min-width: 1024px) {
+  main .space-y-6 > * + * { margin-top: 28px; }
+  main .grid { gap: 22px; }
+}
+
+/* Cards carry their own padding; the old 20px felt cramped once the radius
+   grew, because a large corner radius needs the content held further in. */
+.dash-card > .p-5 { padding: 22px; }
+.dash-card > div > .px-5 { padding-inline: 22px; }
+
+/* ── Charts and maps ─────────────────────────────────────────────────────── */
+/* Leaflet ships a white tile pane that punches a hole through dark glass. */
+
+.leaflet-container {
+  background: var(--g-fill-2) !important;
+  border-radius: var(--g-r-lg);
+  font-family: inherit !important;
+}
+.dark .leaflet-tile { filter: invert(1) hue-rotate(185deg) brightness(0.86) contrast(0.92); }
+.leaflet-control-attribution {
+  background: var(--g-fill-2) !important;
+  color: var(--rn-text-3) !important;
+  backdrop-filter: blur(8px);
+  border-radius: 6px 0 0 0;
+}
+.leaflet-control-attribution a { color: var(--rn-text-2) !important; }
+.leaflet-bar a {
+  background: var(--g-fill-1) !important;
+  color: var(--rn-text) !important;
+  border-color: var(--rn-border) !important;
+}
+
+/* ── Ticker ──────────────────────────────────────────────────────────────── */
+
+.ticker {
+  border-radius: 999px;
+  font-size: var(--t-micro);
+  color: var(--rn-text-2);
+}
+
+/* ── KPI row ─────────────────────────────────────────────────────────────── */
+/* Five fixed columns meant the tiles were ~190px wide on a 1440 screen once
+   the sidebar took its share, and every label wrapped onto three lines.
+   auto-fit lets the row decide for itself: five across when there is room,
+   three then two as it narrows, without a breakpoint per layout. */
+
+.kpi-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
+}
+@media (max-width: 520px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+.kpi-grid > .dash-card { padding: 20px; }
+
+/* Labels must not wrap -- a two-line "UNITS IN / STOCK" breaks the row's
+   baseline and is the main reason the old tiles looked untidy. */
+.kpi-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The supporting sentence is secondary; cap it so one long one cannot make
+   every tile in the row taller. */
+.kpi-grid .dash-card > p:last-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   States without colour
+   ───────────────────────────────────────────────────────────────────────────
+   Red/amber/green carried the severity of everything on these pages. With no
+   hue available, each level has to be signalled twice -- once by luminance
+   and once by FORM -- so that it still reads when luminance alone is not
+   enough. Critical is solid and inverted, warning is outlined, healthy is
+   hollow and quiet. Severity therefore increases with ink on the page, which
+   is also how a printed table would do it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Status dots ─────────────────────────────────────────────────────────── */
+/* Same 8px circle, three different constructions. */
+
+.bg-red-500, .bg-rose-500 {          /* critical: solid, full contrast */
+  background-color: var(--rn-text) !important;
+  box-shadow: 0 0 0 3px var(--s-critical-bg);
+}
+.bg-amber-500, .bg-orange-500 {      /* warning: ring, hollow centre */
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 2px var(--s-warning);
+}
+.bg-emerald-500, .bg-green-500 {     /* healthy: faint, flat */
+  background-color: var(--s-good) !important;
+  box-shadow: none;
+}
+.bg-indigo-500, .bg-violet-500, .bg-blue-500, .bg-cyan-500 {
+  background-color: var(--s-info) !important;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+/* Inversion is the loudest thing monochrome has, so it is spent on one
+   level only. Everything below critical is an outline. */
+
+.badge-red, .badge-rose {
+  color: var(--g-accent-ink);
+  background: var(--rn-text);
+  border-color: transparent;
+  font-weight: 650;
+}
+.badge-amber, .badge-orange {
+  color: var(--rn-text);
+  background: transparent;
+  border-color: currentColor;
+  font-weight: 600;
+}
+.badge-emerald, .badge-green {
+  color: var(--rn-text-2);
+  background: var(--g-fill-3);
+  border-color: var(--rn-border);
+}
+.badge-blue, .badge-cyan, .badge-indigo, .badge-violet, .badge-purple,
+.badge-slate {
+  color: var(--rn-text-2);
+  background: var(--g-fill-3);
+  border-color: var(--rn-border);
+}
+
+/* ── Progress and meters ─────────────────────────────────────────────────── */
+/* Track stays faint; the bar carries the level. A critical bar is solid ink,
+   a healthy one is barely there. */
+
+.progress-track, progress { background: var(--g-fill-3) !important; }
+[class*='bg-red-500'].progress-bar,
+.progress-bar[data-tone='red'] { background: var(--rn-text) !important; }
+.progress-bar[data-tone='amber'] { background: var(--s-warning) !important; }
+.progress-bar[data-tone='emerald'] { background: var(--s-good) !important; }
+
+/* ── Rows that need attention ────────────────────────────────────────────── */
+/* A hairline rule in the margin, which is how a newspaper marks a correction
+   and costs no colour at all. */
+
+tr[data-critical='true'] td:first-child,
+.is-critical {
+  box-shadow: inset 2px 0 0 var(--rn-text);
+}
+
+/* ── Alert banners ───────────────────────────────────────────────────────── */
+/* The amber-tinted panel becomes an outlined one with a heavier rule on the
+   leading edge. */
+
+[class*='border-amber-500'], [class*='border-red-500'] {
+  border-color: var(--rn-border) !important;
+  border-left: 2px solid var(--rn-text) !important;
+}
+[class*='bg-amber-500/5'], [class*='bg-red-500/5'] {
+  background-color: var(--g-fill-3) !important;
+}
+
+/* ── Imagery ─────────────────────────────────────────────────────────────── */
+/* Maps and charts arrive in colour from their libraries, so they are
+   desaturated at the edge of the system rather than reconfigured one by one.
+   Monochrome has to be total or it looks like an accident. */
+
+.leaflet-container { filter: grayscale(1); }
+.leaflet-tile { filter: grayscale(1) contrast(0.92) brightness(1.02); }
+.dark .leaflet-tile {
+  filter: grayscale(1) invert(1) contrast(0.80) brightness(0.92);
+}
+.leaflet-marker-icon, .leaflet-interactive { filter: grayscale(1); }
+
+canvas { filter: grayscale(1); }
+
+/* The brand mark: ink on paper, inverted in the dark. */
+.g-mark {
+  background: var(--rn-text) !important;
+  color: var(--rn-bg) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 14px -4px rgba(0, 0, 0, 0.30);
+}
+
+/* Primary buttons are a solid block of ink rather than a gradient. */
+.rn-btn-primary, .rn-btn-ai {
+  background-image: none;
+  background-color: var(--rn-text);
+  color: var(--rn-bg);
+}
+.rn-btn-primary:hover:not(:disabled),
+.rn-btn-ai:hover:not(:disabled) { filter: none; opacity: 0.86; }
+
+/* The hero's bloom and the KPI bloom lose their tint too. */
+.page-hero::after,
+.kpi-card::after {
+  background: radial-gradient(circle, var(--g-accent-glow), transparent 68%);
+}
+
+/* The active nav pill: a flat tint plus the existing edge marker, no glow. */
+.sidebar-fixed nav a[aria-current='page'] {
+  background: var(--g-fill-1);
+  box-shadow: inset 0 1px 0 var(--g-rim-strong);
+}
+.sidebar-fixed nav a[aria-current='page']::after {
+  background: var(--rn-text);
+  box-shadow: none;
+}
+
+/* Text selection, which is otherwise the browser's blue. */
+::selection { background: var(--rn-text); color: var(--rn-bg); }
+
+/* ── Typographic weight as hierarchy ─────────────────────────────────────── */
+/* With one ink, weight and size do most of the work that colour used to. */
+
+th { font-weight: 600; }
+.kpi-value { font-weight: 620; letter-spacing: -0.04em; }
+.g-eyebrow { color: var(--rn-text-3); }
+
+/* ── The legacy palette ──────────────────────────────────────────────────── */
+/* resnav.css defines --c-accent, --c-red and friends, and components read
+   them from INLINE styles -- Progress sets `background: var(--c-red)` on the
+   element itself, which no stylesheet rule can override. Redefining the
+   variables is therefore the only way to reach them, and it catches every
+   other consumer at the same time.
+   Severity still increases with ink: red is full contrast, amber is three
+   quarters, emerald is a quiet grey. */
+
+:root {
+  --c-accent:  #000000;  --c-accent-2: #2b2b2b;
+  --c-red:     #000000;
+  --c-rose:    #000000;
+  --c-amber:   rgba(0, 0, 0, 0.70);
+  --c-orange:  rgba(0, 0, 0, 0.70);
+  --c-emerald: rgba(0, 0, 0, 0.42);
+  --c-teal:    rgba(0, 0, 0, 0.42);
+  --c-blue:    rgba(0, 0, 0, 0.55);
+  --c-cyan:    rgba(0, 0, 0, 0.55);
+  --c-indigo:  #000000;
+  --c-violet:  #000000;
+  --c-purple:  #000000;
+}
+
+.dark {
+  --c-accent:  #ffffff;  --c-accent-2: #d4d4d4;
+  --c-red:     #ffffff;
+  --c-rose:    #ffffff;
+  --c-amber:   rgba(255, 255, 255, 0.74);
+  --c-orange:  rgba(255, 255, 255, 0.74);
+  --c-emerald: rgba(255, 255, 255, 0.44);
+  --c-teal:    rgba(255, 255, 255, 0.44);
+  --c-blue:    rgba(255, 255, 255, 0.58);
+  --c-cyan:    rgba(255, 255, 255, 0.58);
+  --c-indigo:  #ffffff;
+  --c-violet:  #ffffff;
+  --c-purple:  #ffffff;
+}
+
+/* The progress track, now that the fill is ink. */
+.rn-progress {
+  background: var(--g-fill-3);
+  border-radius: 999px;
+  overflow: hidden;
+  height: 5px;
+}
+.rn-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s var(--g-spring);
+}
+
+/* Table headers inherited a warm grey from the old beige scheme. */
+table thead th { background: var(--g-fill-2); color: var(--rn-text-3); }

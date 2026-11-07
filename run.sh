@@ -366,6 +366,10 @@ target_lint() {
   # runner and the concurrency experiments -- so they are linted as well.
   ( cd backend && "$PY" -m ruff check . )
   "$PY" -m ruff check db/ tools/
+  echo "==> monochrome"
+  # The interface has no hue in it by design. Checked rather than remembered:
+  # the quickest way to make something stand out is to reach for red.
+  python3 -I tools/check_monochrome.py
   echo "==> eslint"
   ( cd frontend && "$NPM_BIN" run lint )
 }

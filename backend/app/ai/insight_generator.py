@@ -52,7 +52,7 @@ def generate_insights(
         insights.append({
             'severity': 'critical',
             'category': 'forecast',
-            'message': f'⚠️ CRITICAL: {len(urgent)} resource(s) will deplete within 7 days — {names}.',
+            'message': f'CRITICAL: {len(urgent)} resource(s) will deplete within 7 days — {names}.',
             'explanation': f'Linear regression forecasts predict imminent depletion for {names}. Immediate restocking required.',
         })
     if warning:
@@ -60,7 +60,7 @@ def generate_insights(
         insights.append({
             'severity': 'warning',
             'category': 'forecast',
-            'message': f'⏳ WARNING: {len(warning)} resource(s) depleting within 14 days — {names}.',
+            'message': f'WARNING: {len(warning)} resource(s) depleting within 14 days — {names}.',
             'explanation': f'Depletion forecast models show {names} trending toward shortage within two weeks.',
         })
 
@@ -73,7 +73,7 @@ def generate_insights(
         insights.append({
             'severity': 'critical',
             'category': 'risk',
-            'message': f'🔴 CRITICAL RISK: {len(critical_zones)} zone(s) at critical risk level — {znames}.',
+            'message': f'CRITICAL RISK: {len(critical_zones)} zone(s) at critical risk level — {znames}.',
             'explanation': f'Weighted risk model indicates critical status for {znames}. Contributing factors include high pending requests, severe demand, and stock shortages.',
         })
     if high_zones:
@@ -81,7 +81,7 @@ def generate_insights(
         insights.append({
             'severity': 'warning',
             'category': 'risk',
-            'message': f'🟠 HIGH RISK: {len(high_zones)} zone(s) at elevated risk — {znames}.',
+            'message': f'HIGH RISK: {len(high_zones)} zone(s) at elevated risk — {znames}.',
             'explanation': f'Risk prediction model flags {znames} as high risk. Proactive resource allocation advised.',
         })
 
@@ -92,7 +92,7 @@ def generate_insights(
         insights.append({
             'severity': 'critical',
             'category': 'anomaly',
-            'message': f'🚨 ANOMALY: {len(high_anomalies)} high-severity anomalies detected — types: {types}.',
+            'message': f'ANOMALY: {len(high_anomalies)} high-severity anomalies detected — types: {types}.',
             'explanation': 'IsolationForest and threshold-based detectors identified unusual patterns requiring investigation.',
         })
     med_anomalies = [a for a in anomalies if a.get('severity') == 'medium']
@@ -100,7 +100,7 @@ def generate_insights(
         insights.append({
             'severity': 'warning',
             'category': 'anomaly',
-            'message': f'⚡ {len(med_anomalies)} medium-severity anomalies detected. Review recommended.',
+            'message': f'{len(med_anomalies)} medium-severity anomalies detected. Review recommended.',
             'explanation': 'Anomaly detection models flagged patterns outside normal operating thresholds.',
         })
 
@@ -112,7 +112,7 @@ def generate_insights(
             insights.append({
                 'severity': 'warning',
                 'category': 'stock',
-                'message': f'📦 Low stock alert: {len(low_stock)} entries below 100 units — {resources}.',
+                'message': f'Low stock alert: {len(low_stock)} entries below 100 units — {resources}.',
                 'explanation': 'Current stock levels for these resources are critically low. Replenishment needed.',
             })
 

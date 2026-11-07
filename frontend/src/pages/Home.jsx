@@ -82,7 +82,7 @@ export function Home() {
         </div>
       ) : null}
 
-      <section aria-label="Key metrics" className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <section aria-label="Key metrics" className="kpi-grid">
         {KPIS.map((kpi) => (
           <KpiCard
             key={kpi.key}

@@ -62,16 +62,18 @@ export function Sidebar({ open, onClose, status }) {
       className="sidebar-fixed glass-sidebar"
       aria-label="Main navigation"
     >
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-sand-200/80 px-5 dark:border-neutral-750/60">
-        <Link to="/" className="group flex items-center gap-2.5" onClick={onClose}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm shadow-indigo-500/30 transition-shadow group-hover:shadow-indigo-500/50">
-            <Icon name="bulb" className="h-4 w-4 text-white" strokeWidth={2.4} />
+      <div className="flex h-[72px] shrink-0 items-center justify-between px-5">
+        <Link to="/" className="group flex items-center gap-3" onClick={onClose}>
+          <span className="g-mark" aria-hidden="true">
+            <Icon name="bulb" className="h-[18px] w-[18px]" strokeWidth={2.2} />
           </span>
-          <span className="text-base font-bold tracking-tight text-sand-600 dark:text-white">
-            ResNav
-          </span>
-          <span className="rounded border border-indigo-200 bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-indigo-700 dark:border-indigo-800/50 dark:bg-indigo-900/40 dark:text-indigo-400">
-            AI
+          <span className="flex flex-col leading-none">
+            <span className="g-display text-[0.9375rem] font-semibold text-[var(--rn-text)]">
+              ResNav
+            </span>
+            <span className="mt-1 text-[0.625rem] font-medium tracking-[0.14em] text-[var(--rn-text-3)]">
+              RELIEF LOGISTICS
+            </span>
           </span>
         </Link>
 
@@ -79,14 +81,14 @@ export function Sidebar({ open, onClose, status }) {
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          className="rounded-lg p-1.5 text-sand-400 hover:text-sand-600 dark:hover:text-neutral-200 lg:hidden"
+          className="rounded-full p-1.5 text-[var(--rn-text-3)] transition-colors hover:text-[var(--rn-text)] lg:hidden"
           aria-label="Close navigation"
         >
           <Icon name="close" className="h-4 w-4" />
         </button>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden pb-3">
         {SECTIONS.map((section) => (
           <div key={section.title}>
             <p className="sidebar-section-title">{section.title}</p>
@@ -106,20 +108,21 @@ export function Sidebar({ open, onClose, status }) {
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-sand-200/60 px-4 py-3 dark:border-neutral-750/60">
-        <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-xs font-bold text-white shadow">
-            AI
-          </span>
+      <div className="shrink-0 p-3">
+        <div className="g-thin flex items-center gap-3 px-3 py-2.5">
+          <StatusDot level={status?.level} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-sand-600 dark:text-neutral-200">
-              ResNav AI
+            <p className="truncate text-[0.6875rem] font-semibold text-[var(--rn-text)]">
+              {status?.level === 'degraded'
+                ? 'Attention required'
+                : status?.level === 'busy'
+                  ? 'Dispatch in progress'
+                  : 'All systems nominal'}
             </p>
-            <p className="text-[10px] text-sand-400 dark:text-neutral-600">
-              {status ? `Fulfilment ${status.fulfilment_rate}%` : 'Intelligence Platform'}
+            <p className="text-[0.625rem] text-[var(--rn-text-3)]">
+              {status ? `${status.fulfilment_rate}% fulfilment` : 'connecting…'}
             </p>
           </div>
-          <StatusDot level={status?.level} />
         </div>
       </div>
     </aside>

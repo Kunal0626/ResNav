@@ -244,7 +244,7 @@ def _generate_simulation_insights(profile, demand_forecast, shortages, populatio
     if critical:
         resources = ", ".join([s["resource"] for s in critical])
         insights.append(
-            f"⚠️ CRITICAL: {len(critical)} resources ({resources}) have >70% shortage "
+            f"CRITICAL: {len(critical)} resources ({resources}) have >70% shortage "
             f"probability under {name} scenario. Immediate pre-positioning required."
         )
 
@@ -268,7 +268,7 @@ def _generate_simulation_insights(profile, demand_forecast, shortages, populatio
     disruption = profile["supply_chain_disruption"]
     if disruption > 0.3:
         insights.append(
-            f"⚠️ Supply chain disruption expected: up to {disruption:.0%} increase "
+            f"Supply chain disruption expected: up to {disruption:.0%} increase "
             f"in logistics costs and delays during {name}."
         )
 

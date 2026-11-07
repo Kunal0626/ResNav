@@ -34,7 +34,7 @@ body {
 
 /* Animated mesh background. */
 .mesh-bg {
-  background: linear-gradient(-45deg, #f5f2eb, #ede9e0, #f0ede6, #f5f2eb);
+  background: var(--rn-bg);
   background-size: 400% 400%;
   animation: mesh 22s ease infinite;
 }
@@ -87,93 +87,16 @@ body {
 
 /* ── Layout ───────────────────────────────────────────────── */
 
-.layout-wrapper {
-  display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
+/* ── Shell layout and glass surfaces ──────────────────────────
+   Moved to styles/glass.css, which owns the material layer in full.
+   They used to be split across both files, and the leftover opaque
+   background here silently beat the new translucent one -- the sidebar
+   computed to rgba(18,18,18,0.95) however the glass rules were written.
+   One source of truth is the fix. */
 
-.sidebar-fixed {
-  position: fixed;
-  inset-block: 0;
-  left: 0;
-  width: 16rem;
-  height: 100vh;
-  height: 100dvh;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  transform: translateX(-100%);
-  transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.sidebar-fixed[data-open='true'] {
-  transform: translateX(0);
-}
-
-.main-scroll-area {
-  flex: 1;
-  min-width: 0;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-@media (min-width: 1024px) {
-  .sidebar-fixed {
-    transform: translateX(0);
-  }
-
-  .main-scroll-area {
-    margin-left: 16rem;
-  }
-}
-
-/* ── Glass surfaces ───────────────────────────────────────── */
-
-.glass-sidebar {
-  background: rgba(253, 252, 249, 0.92);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-right: 1px solid rgba(232, 227, 218, 0.8);
-}
-
-.dark .glass-sidebar {
-  background: rgba(18, 18, 18, 0.95);
-  border-right: 1px solid rgba(60, 60, 60, 0.4);
-}
-
-.glass-header {
-  background: rgba(253, 252, 249, 0.82);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border-bottom: 1px solid rgba(232, 227, 218, 0.7);
-}
-
-.dark .glass-header {
-  background: rgba(18, 18, 18, 0.82);
-  border-bottom: 1px solid rgba(60, 60, 60, 0.3);
-}
-
-/* Backdrop-filter is expensive and can wash out text where it is unsupported. */
-@supports not (backdrop-filter: blur(1px)) {
-  .glass-sidebar {
-    background: var(--rn-surface);
-  }
-
-  .dark .glass-sidebar {
-    background: #121212;
-  }
-
-  .glass-header {
-    background: var(--rn-surface);
-  }
-
-  .dark .glass-header {
-    background: #121212;
-  }
-}
+/* The no-backdrop-filter fallback also lives in glass.css now, against the
+   current tokens. The copy that was here hardcoded #121212, which stopped
+   matching the moment the dark background changed. */
 
 /* ── Navigation ───────────────────────────────────────────── */
 
@@ -191,15 +114,7 @@ body {
     color var(--transition-fast);
 }
 
-.nav-link:hover {
-  background: rgba(107, 101, 96, 0.08);
-  color: var(--rn-text);
-}
-
-.dark .nav-link:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #e8e8e8;
-}
+.nav-link:hover { color: var(--rn-text); }
 
 .nav-link svg {
   flex-shrink: 0;
@@ -212,15 +127,13 @@ body {
   opacity: 1;
 }
 
+/* The active pill's appearance lives in glass.css. These rules used to
+   hardcode indigo, and `.dark .nav-link.nav-link-active` carried three
+   classes -- enough specificity to beat the newer rule and keep a lavender
+   tint in an interface with no colour in it. */
 .nav-link.nav-link-active {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--c-accent);
+  color: var(--rn-text);
   font-weight: 600;
-}
-
-.dark .nav-link.nav-link-active {
-  background: rgba(99, 102, 241, 0.14);
-  color: #818cf8;
 }
 
 /* ── Scrollbars ───────────────────────────────────────────── */
@@ -235,12 +148,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.18);
+  background: var(--g-fill-3);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.34);
+  background: var(--g-fill-1);
 }
 
 /* ── Motion ───────────────────────────────────────────────── */

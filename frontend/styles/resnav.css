@@ -9,19 +9,19 @@
   --rn-bg:             #F5F2EB;
   --rn-surface:        #FDFCF9;
   --rn-card-bg:        rgba(253,252,249,0.85);
-  --rn-card-border:    rgba(232,227,218,0.8);
-  --rn-border:         #E8E3DA;
+  --rn-card-border:    var(--rn-border);
+  --rn-border:         var(--rn-border);
   --rn-text:           #2C2825;
   --rn-text-2:         #6B6560;
-  --rn-text-3:         #9A927F;
+  --rn-text-3:         var(--rn-text-2);
 
-  --c-accent:  #6366f1;  --c-accent-2: #8b5cf6;
-  --c-blue:    #3b82f6;  --c-indigo:   #6366f1;
-  --c-amber:   #f59e0b;  --c-red:      #ef4444;
-  --c-purple:  #8b5cf6;  --c-cyan:     #06b6d4;
-  --c-rose:    #f43f5e;  --c-orange:   #f97316;
-  --c-emerald: #10b981;  --c-teal:     #14b8a6;
-  --c-violet:  #7c3aed;
+  --c-accent:  var(--rn-text-2);  --c-accent-2: var(--rn-text-2);
+  --c-blue:    var(--rn-text-2);  --c-indigo:   var(--rn-text-2);
+  --c-amber:   var(--rn-text-2);  --c-red:      var(--rn-text-2);
+  --c-purple:  var(--rn-text-2);  --c-cyan:     var(--rn-text-2);
+  --c-rose:    var(--rn-text-2);  --c-orange:   var(--rn-text-2);
+  --c-emerald: var(--rn-text-2);  --c-teal:     var(--rn-text-2);
+  --c-violet:  var(--rn-text-2);
 
   --radius-card: 16px;
   --radius-btn:  10px;
@@ -149,24 +149,26 @@
   white-space: nowrap;
 }
 .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.badge-emerald { background:rgba(16,185,129,0.12); color:#10b981; border-color:rgba(16,185,129,0.25); }
-.badge-blue    { background:rgba(59,130,246,0.12);  color:#3b82f6; border-color:rgba(59,130,246,0.25); }
-.badge-amber   { background:rgba(245,158,11,0.12);  color:#f59e0b; border-color:rgba(245,158,11,0.25); }
-.badge-red     { background:rgba(239,68,68,0.12);   color:#ef4444; border-color:rgba(239,68,68,0.25); }
-.badge-purple  { background:rgba(139,92,246,0.12);  color:#8b5cf6; border-color:rgba(139,92,246,0.25); }
-.badge-indigo  { background:rgba(99,102,241,0.12);  color:#6366f1; border-color:rgba(99,102,241,0.25); }
-.badge-slate   { background:rgba(107,101,96,0.10);  color:#9A927F; border-color:rgba(107,101,96,0.2); }
-.badge-cyan    { background:rgba(6,182,212,0.12);   color:#06b6d4; border-color:rgba(6,182,212,0.25); }
-.badge-orange  { background:rgba(249,115,22,0.12);  color:#f97316; border-color:rgba(249,115,22,0.25); }
-.badge-violet  { background:rgba(124,58,237,0.12);  color:#7c3aed; border-color:rgba(124,58,237,0.25); }
-.dark .badge-emerald { background:rgba(16,185,129,0.18); }
-.dark .badge-blue    { background:rgba(59,130,246,0.18); }
-.dark .badge-amber   { background:rgba(245,158,11,0.18); }
-.dark .badge-red     { background:rgba(239,68,68,0.18); }
-.dark .badge-purple  { background:rgba(139,92,246,0.18); }
-.dark .badge-indigo  { background:rgba(99,102,241,0.18); }
-.dark .badge-cyan    { background:rgba(6,182,212,0.18); }
-.dark .badge-violet  { background:rgba(124,58,237,0.18); }
+/* Badge tones. Monochrome, by ink rather than hue -- see glass.css for why
+   critical is inverted and everything below it is an outline. These lived
+   here as twenty hardcoded colours, and the `.dark .badge-*` variants
+   carried two classes each, which is enough specificity to beat a rule
+   written later in another file. Changing them at the source is the fix. */
+.badge-red, .badge-rose {
+  background: var(--rn-text); color: var(--rn-bg);
+  border-color: transparent; font-weight: 650;
+}
+.badge-amber, .badge-orange {
+  background: transparent; color: var(--rn-text);
+  border-color: var(--rn-text-3); font-weight: 600;
+}
+.badge-emerald, .badge-green,
+.badge-blue, .badge-cyan,
+.badge-indigo, .badge-violet, .badge-purple,
+.badge-slate {
+  background: var(--g-fill-3); color: var(--rn-text-2);
+  border-color: var(--rn-border);
+}
 
 /* ── Pulse Animation ── */
 @keyframes rn-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
@@ -186,20 +188,20 @@
 .rn-btn:active:not(:disabled) { transform: scale(0.97); }
 .rn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .rn-btn-primary {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white; box-shadow: 0 2px 8px rgba(99,102,241,0.28);
+  background: linear-gradient(135deg, var(--rn-text), var(--rn-text));
+  color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.28);
 }
-.rn-btn-primary:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(99,102,241,0.38); }
+.rn-btn-primary:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
 .rn-btn-danger {
-  background: linear-gradient(135deg, #f97316, #ef4444);
-  color: white; box-shadow: 0 2px 8px rgba(239,68,68,0.22);
+  background: linear-gradient(135deg, var(--rn-text), var(--rn-text));
+  color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.22);
 }
-.rn-btn-danger:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(239,68,68,0.32); }
+.rn-btn-danger:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(0,0,0,0.32); }
 .rn-btn-ai {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white; box-shadow: 0 2px 8px rgba(99,102,241,0.28);
+  background: linear-gradient(135deg, var(--rn-text), var(--rn-text));
+  color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.28);
 }
-.rn-btn-ai:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(99,102,241,0.38); }
+.rn-btn-ai:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
 .rn-btn-ghost {
   background: transparent;
   color: var(--rn-text-2);
@@ -219,7 +221,7 @@
 }
 .rn-input:focus, .rn-select:focus, .rn-textarea:focus {
   border-color: var(--c-accent);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.15);
 }
 .rn-label {
   display: block; font-size: 0.75rem; font-weight: 600;
@@ -227,18 +229,17 @@
 }
 
 /* ── Active Sidebar State ── */
-.nav-link-active {
-  background: rgba(99,102,241,0.1) !important;
-  color: #6366f1 !important;
-}
-.dark .nav-link-active { color: #818cf8 !important; }
+/* Active-state appearance is owned by glass.css. What was here used
+   !important with a hardcoded indigo, which survived three attempts to
+   remove colour from the interface. */
 .nav-link-active svg { opacity: 1 !important; color: inherit; }
+.nav-link-active { color: var(--rn-text) !important; }
 
 /* ── Page Hero ── */
 .page-hero {
   border-radius: 16px; padding: 24px 28px; margin-bottom: 24px;
   border: 1px solid var(--rn-border);
-  background: linear-gradient(135deg, var(--rn-card-bg) 0%, rgba(99,102,241,0.03) 100%);
+  background: linear-gradient(135deg, var(--rn-card-bg) 0%, var(--g-fill-3) 100%);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 
@@ -252,12 +253,12 @@
   color: #999; overflow-y: auto;
 }
 .dark .terminal-panel { background: #0A0A0A; }
-.terminal-panel .t-green  { color: #10b981; }
-.terminal-panel .t-red    { color: #ef4444; }
-.terminal-panel .t-amber  { color: #f59e0b; }
-.terminal-panel .t-blue   { color: #3b82f6; }
-.terminal-panel .t-purple { color: #8b5cf6; }
-.terminal-panel .t-cyan   { color: #06b6d4; }
+.terminal-panel .t-green  { color: var(--rn-text); }
+.terminal-panel .t-red    { color: var(--rn-text); }
+.terminal-panel .t-amber  { color: var(--rn-text); }
+.terminal-panel .t-blue   { color: var(--rn-text); }
+.terminal-panel .t-purple { color: var(--rn-text); }
+.terminal-panel .t-cyan   { color: var(--rn-text); }
 .terminal-panel .t-dim    { color: #444; }
 .terminal-panel .t-white  { color: #ddd; }
 
@@ -277,11 +278,11 @@
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 10px; border-radius: 999px;
   font-size: 0.6875rem; font-weight: 600;
-  border: 1px solid rgba(99,102,241,0.25);
-  background: rgba(99,102,241,0.08);
-  color: #6366f1;
+  border: 1px solid var(--rn-border);
+  background: var(--g-fill-3);
+  color: var(--rn-text);
 }
-.dark .status-pill { border-color: rgba(99,102,241,0.3); color: #818cf8; }
+.dark .status-pill { border-color: var(--rn-border); color: var(--rn-border); }
 
 /* ── AI Modal ── */
 .ai-modal-overlay {
@@ -333,7 +334,7 @@
   content: '';
   position: absolute; inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2), transparent, transparent);
+  background: linear-gradient(135deg, var(--g-fill-3), var(--g-fill-3), transparent, transparent);
   z-index: -1;
   opacity: 0;
   transition: opacity 0.3s;
@@ -343,7 +344,7 @@
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:rgba(154,146,127,0.3); border-radius:4px; }
+::-webkit-scrollbar-thumb { background:var(--rn-border); border-radius:4px; }
 .dark ::-webkit-scrollbar-thumb { background:rgba(102,102,102,0.4); }
 
 /* ── AI Typing cursor ── */
@@ -364,12 +365,12 @@
   100% { background-position: 200% 0; }
 }
 .shimmer-load {
-  background: linear-gradient(90deg, transparent 25%, rgba(99,102,241,0.08) 50%, transparent 75%);
+  background: linear-gradient(90deg, transparent 25%, var(--g-fill-3) 50%, transparent 75%);
   background-size: 200% 100%;
   animation: shimmer 2s ease-in-out infinite;
 }
 .dark .shimmer-load {
-  background: linear-gradient(90deg, transparent 25%, rgba(99,102,241,0.15) 50%, transparent 75%);
+  background: linear-gradient(90deg, transparent 25%, var(--g-fill-3) 50%, transparent 75%);
   background-size: 200% 100%;
 }
 
@@ -384,8 +385,8 @@
 
 /* ── Breath Glow (subtle border glow) ── */
 @keyframes breathGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
-  50% { box-shadow: 0 0 20px 2px rgba(99,102,241,0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0.0); }
+  50% { box-shadow: 0 0 20px 2px rgba(0,0,0,0.15); }
 }
 .breath-glow {
   animation: breathGlow 3s ease-in-out infinite;
@@ -394,15 +395,15 @@
   animation: breathGlowRed 2s ease-in-out infinite;
 }
 @keyframes breathGlowRed {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
-  50% { box-shadow: 0 0 20px 2px rgba(239,68,68,0.2); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0.0); }
+  50% { box-shadow: 0 0 20px 2px rgba(0,0,0,0.2); }
 }
 .breath-glow-amber {
   animation: breathGlowAmber 2.5s ease-in-out infinite;
 }
 @keyframes breathGlowAmber {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
-  50% { box-shadow: 0 0 16px 2px rgba(245,158,11,0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0.0); }
+  50% { box-shadow: 0 0 16px 2px rgba(0,0,0,0.15); }
 }
 
 /* ── Slide-In Cascades ── */
@@ -536,7 +537,7 @@
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.2), rgba(6,182,212,0.2), rgba(16,185,129,0.2));
+  background: linear-gradient(135deg, var(--g-fill-3), var(--g-fill-3), var(--g-fill-3), var(--g-fill-3));
   background-size: 400% 400%;
   animation: glowBorder 4s ease infinite;
   z-index: -1;
@@ -556,33 +557,33 @@
   background: var(--rn-card-bg);
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(239,68,68,0.25);
+  border: 1px solid var(--rn-border);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card), 0 0 0 1px rgba(239,68,68,0.05);
+  box-shadow: var(--shadow-card), 0 0 0 1px rgba(0,0,0,0.05);
   transition: all var(--transition-fast);
 }
 .glass-card-alert:hover {
-  border-color: rgba(239,68,68,0.5);
-  box-shadow: var(--shadow-card-hover), 0 0 20px rgba(239,68,68,0.1);
+  border-color: var(--rn-border);
+  box-shadow: var(--shadow-card-hover), 0 0 20px rgba(0,0,0,0.1);
 }
 
 /* ── AI Intelligence Card (indigo emphasis) ── */
 .glass-card-ai {
-  background: linear-gradient(135deg, var(--rn-card-bg) 0%, rgba(99,102,241,0.04) 100%);
+  background: linear-gradient(135deg, var(--rn-card-bg) 0%, var(--g-fill-3) 100%);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(99,102,241,0.15);
+  border: 1px solid var(--rn-border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   transition: all var(--transition-fast);
 }
 .glass-card-ai:hover {
-  border-color: rgba(99,102,241,0.3);
-  box-shadow: var(--shadow-card-hover), 0 0 24px rgba(99,102,241,0.08);
+  border-color: var(--rn-border);
+  box-shadow: var(--shadow-card-hover), 0 0 24px rgba(0,0,0,0.08);
 }
 .dark .glass-card-ai {
-  background: linear-gradient(135deg, rgba(26,26,26,0.75) 0%, rgba(99,102,241,0.06) 100%);
-  border-color: rgba(99,102,241,0.2);
+  background: linear-gradient(135deg, rgba(26,26,26,0.75) 0%, var(--g-fill-3) 100%);
+  border-color: var(--rn-border);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -592,15 +593,15 @@
 /* ── AI Reasoning Box ── */
 .ai-reasoning-box {
   padding: 12px 16px;
-  border-radius: 12px;
-  border-left: 3px solid var(--c-accent);
-  background: rgba(99,102,241,0.04);
+  border-radius: var(--g-r-md);
+  /* A quotation rule, the way a pull-quote is set, rather than a tinted
+     panel. The indent and the rule carry the "this is the system
+     explaining itself" meaning that the colour used to. */
+  border-left: 2px solid var(--rn-text);
+  background: var(--g-fill-3);
   font-size: 0.75rem;
   color: var(--rn-text-2);
   line-height: 1.6;
-}
-.dark .ai-reasoning-box {
-  background: rgba(99,102,241,0.08);
 }
 
 /* ── Sparkline Container ── */
@@ -667,7 +668,7 @@
 }
 .pipeline-step.active .step-dot {
   background: var(--c-accent);
-  box-shadow: 0 0 8px rgba(99,102,241,0.5);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
 }
 .pipeline-step.complete .step-dot {
   background: var(--c-emerald);
@@ -685,14 +686,14 @@
   cursor: default;
 }
 .token-highlight.matched {
-  background: rgba(99,102,241,0.12);
+  background: var(--g-fill-3);
   color: var(--c-accent);
-  border: 1px solid rgba(99,102,241,0.2);
+  border: 1px solid var(--rn-border);
 }
 .token-highlight.urgency {
-  background: rgba(239,68,68,0.12);
+  background: var(--g-fill-3);
   color: var(--c-red);
-  border: 1px solid rgba(239,68,68,0.2);
+  border: 1px solid var(--rn-border);
 }
 .token-highlight.neutral {
   background: rgba(107,101,96,0.06);
@@ -719,10 +720,10 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 .severity-none    { background: rgba(107,101,96,0.06); color: var(--rn-text-3); }
-.severity-low     { background: rgba(16,185,129,0.15); color: #10b981; }
-.severity-medium  { background: rgba(245,158,11,0.2);  color: #f59e0b; }
-.severity-high    { background: rgba(239,68,68,0.2);   color: #ef4444; }
-.severity-critical { background: rgba(239,68,68,0.35); color: #ef4444; font-weight: 800; }
+.severity-low     { background: var(--g-fill-3); color: var(--rn-text); }
+.severity-medium  { background: var(--g-fill-3);  color: var(--rn-text); }
+.severity-high    { background: var(--g-fill-3);   color: var(--rn-text); }
+.severity-critical { background: var(--g-fill-3); color: var(--rn-text); font-weight: 800; }
 
 /* ── Live Indicator ── */
 .live-indicator {
@@ -738,7 +739,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--rn-text);
   position: relative;
 }
 .live-indicator .live-dot::before {
@@ -746,7 +747,7 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  background: rgba(239,68,68,0.3);
+  background: var(--g-fill-3);
   animation: rn-pulse 2s ease-in-out infinite;
 }
 
@@ -761,12 +762,12 @@
   border-radius: 6px;
 }
 .metric-delta.up {
-  background: rgba(16,185,129,0.1);
-  color: #10b981;
+  background: var(--g-fill-3);
+  color: var(--rn-text);
 }
 .metric-delta.down {
-  background: rgba(239,68,68,0.1);
-  color: #ef4444;
+  background: var(--g-fill-3);
+  color: var(--rn-text);
 }
 
 /* ── Animated Gradient Text ── */
@@ -775,7 +776,7 @@
   50% { background-position: 100% 50%; }
 }
 .gradient-text {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
+  background: linear-gradient(135deg, var(--rn-text), var(--rn-text), var(--rn-text), var(--rn-text));
   background-size: 300% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -785,7 +786,7 @@
 
 /* ── Glow Text ── */
 .glow-text {
-  text-shadow: 0 0 10px rgba(99,102,241,0.3), 0 0 40px rgba(99,102,241,0.1);
+  text-shadow: 0 0 10px rgba(0,0,0,0.3), 0 0 40px rgba(0,0,0,0.1);
 }
 
 /* ── Search Autocomplete ── */
@@ -813,7 +814,7 @@
   gap: 8px;
 }
 .search-suggestion-item:hover {
-  background: rgba(99,102,241,0.06);
+  background: var(--g-fill-3);
   color: var(--rn-text);
 }
 .search-suggestion-item .suggestion-icon {
