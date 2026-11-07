@@ -1,22 +1,26 @@
 # Thin wrapper over run.sh.
 #
-# Every target delegates, so there is exactly one implementation of each step
-# and `make test` and `./run.sh test` can never disagree. The brief asks for a
-# Makefile; the credential handling belongs in shell, where it is readable.
+# Every target delegates, so there is one implementation of each step and
+# `make test` and `./run.sh test` can never disagree.
 #
-# .PHONY because these are actions, not files. Without it, a file named
-# "test" in the repo would make `make test` decide there was nothing to do.
+# .PHONY because these are actions, not files. Without it, a directory named
+# "test" would make `make test` decide there was nothing to do.
 
-.PHONY: help check docs schema seed reset test demo shell
+.PHONY: help install check docs schema seed reset api web test lint build demo shell
 
 help:
 	@./run.sh --help || true
 
-check:  ; @./run.sh check
-docs:   ; @./run.sh docs
-schema: ; @./run.sh schema
-seed:   ; @./run.sh seed
-reset:  ; @./run.sh reset
-test:   ; @./run.sh test
-demo:   ; @./run.sh demo
-shell:  ; @./run.sh shell
+install: ; @./run.sh install
+check:   ; @./run.sh check
+docs:    ; @./run.sh docs
+schema:  ; @./run.sh schema
+seed:    ; @./run.sh seed
+reset:   ; @./run.sh reset
+api:     ; @./run.sh api
+web:     ; @./run.sh web
+test:    ; @./run.sh test
+lint:    ; @./run.sh lint
+build:   ; @./run.sh build
+demo:    ; @./run.sh demo
+shell:   ; @./run.sh shell

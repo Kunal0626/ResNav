@@ -1,3 +1,13 @@
+# ⚠ NOT YET UPDATED FOR MYSQL, AND NOT TESTED.
+#
+# This file was imported from ResNav AI, where the database was a SQLite file
+# on a mounted volume. The merged app uses MySQL, so this stack is wrong: it
+# has no database service and still sets DATABASE_PATH.
+#
+# Phase 8 rewrites it as mysql + api + web and tests it. Docker is not
+# installed on the development machine, so nothing here has been run.
+# Until then, use the local path:  ./run.sh install && ./run.sh reset
+#
 # Local production-parity stack: the API in a container, the frontend built and
 # served as static files. For day-to-day development use `npm run dev` and
 # `python manage.py run` instead — both give hot reload.
