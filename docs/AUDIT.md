@@ -114,11 +114,32 @@ Measured proof: with that file deleted, all of `test_allocation.py` errors with
 passes. Running `test_allocation.py` grew the real database's `Requests` table
 from **11 rows to 19**.
 
-Consequences: the suite passes only when a seeded dev database happens to exist,
-tests mutate real data, and results depend on the order tests ran in. The fix is
-for the connection layer to read the active app's settings; it lands in Phase 4
-along with the MySQL port, with a test that asserts isolation. Until then
-`./run.sh test` seeds that file first, so the target is at least reproducible.
+**The suite is therefore not idempotent.** Run against one database repeatedly,
+it passes twice and then fails from the third run onward:
+
+```
+run 1: total stock 2505, Requests 11 rows   51 passed
+run 2: total stock 2460, Requests 19 rows   51 passed
+run 3: total stock 2430, Requests 27 rows   FAILED test_partial_plan_leaves_request_allocated_not_fulfilled
+run 4: total stock 2430, Requests 35 rows   FAILED (same)
+```
+
+Each run drains stock and adds eight `Requests` rows. Once the allocation tests
+have exhausted the stock they draw on, the partial-fulfilment test can no longer
+produce a partial result and fails. Nothing about the code changed between run 2
+and run 3 — only the accumulated state of a database the tests were never
+supposed to touch.
+
+Consequences: results depend on how many times the suite has been run before,
+on whether a seeded dev database happens to exist, and on test order. A green
+run proves less than it appears to.
+
+The fix is for the connection layer to resolve its path from the active
+application's settings rather than a cached global. It lands in Phase 4
+alongside the MySQL port, with a test that asserts isolation — deleting no
+database and still passing twice in a row. Until then `./run.sh test` deletes
+and re-seeds `backend/instance` on every run, which makes the target
+reproducible without pretending the bug is fixed.
 
 ### `backend/.env` is never read
 

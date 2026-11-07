@@ -145,7 +145,71 @@ need_venv() {
   fi
 }
 
+# Locate npm, and put it on PATH for every subshell.
+#
+# nvm is a shell FUNCTION: it only puts node on PATH in a shell that has
+# sourced nvm.sh. A script, a cron job, an IDE terminal, or a shell whose
+# profile points nvm at the wrong location all end up without npm, and the
+# failure looks like "npm: command not found" rather than anything useful.
+# Resolving it ourselves means a clone builds without the user first having to
+# repair their shell profile.
+NPM_BIN=""
+find_npm() {
+  [[ -n "$NPM_BIN" ]] && return 0
+
+  if command -v npm >/dev/null 2>&1; then
+    NPM_BIN="$(command -v npm)"
+    return 0
+  fi
+
+  local nvm_dir="${NVM_DIR:-$HOME/.nvm}" dir="" want=""
+  if [[ -d "$nvm_dir/versions/node" ]]; then
+    # Prefer whatever nvm calls "default"; otherwise the highest installed.
+    [[ -r "$nvm_dir/alias/default" ]] && want="$(cat "$nvm_dir/alias/default")"
+    if [[ -n "$want" ]]; then
+      dir="$(find "$nvm_dir/versions/node" -maxdepth 1 -name "v${want#v}*" 2>/dev/null \
+             | sort -V | tail -1)"
+    fi
+    [[ -z "$dir" ]] && dir="$(find "$nvm_dir/versions/node" -maxdepth 1 -name 'v*' 2>/dev/null \
+                              | sort -V | tail -1)"
+    if [[ -n "$dir" && -x "$dir/bin/npm" ]]; then
+      # Prepend so npm can also find its own node.
+      PATH="$dir/bin:$PATH"; export PATH
+      NPM_BIN="$dir/bin/npm"
+      return 0
+    fi
+  fi
+
+  local candidate
+  for candidate in /opt/homebrew/bin/npm /usr/local/bin/npm /usr/bin/npm; do
+    if [[ -x "$candidate" ]]; then
+      PATH="$(dirname "$candidate"):$PATH"; export PATH
+      NPM_BIN="$candidate"
+      return 0
+    fi
+  done
+
+  cat >&2 <<'MSG'
+error: npm not found.
+
+Node 20+ is required to build the frontend. Checked: PATH, $NVM_DIR
+(~/.nvm/versions/node), /opt/homebrew/bin, /usr/local/bin, /usr/bin.
+
+If you installed Node with nvm, your shell has not loaded it. nvm is a shell
+function, so it has to be sourced in your profile. Add to ~/.zshrc:
+
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+then open a new terminal. Otherwise set the path explicitly:
+
+    PATH=/path/to/node/bin:$PATH ./run.sh install
+MSG
+  exit 1
+}
+
 need_node_modules() {
+  find_npm
   if [[ ! -d frontend/node_modules ]]; then
     echo "error: frontend dependencies missing. Run:  ./run.sh install" >&2
     exit 1
@@ -170,8 +234,9 @@ target_install() {
   echo "    $("$PY" --version), dependencies installed"
 
   echo "==> frontend dependencies"
-  ( cd frontend && npm install --silent )
-  echo "    node $(node -v), dependencies installed"
+  find_npm
+  ( cd frontend && "$NPM_BIN" install --silent )
+  echo "    node $(node -v 2>/dev/null || echo '?') via $NPM_BIN, dependencies installed"
 
   echo
   echo "Next:  cp .env.example .env && chmod 600 .env   # then edit it"
@@ -258,7 +323,7 @@ target_api() {
 target_web() {
   need_node_modules
   echo "==> Vite on http://localhost:5173  (proxies /api to 127.0.0.1:5001)"
-  cd frontend && exec npm run dev
+  cd frontend && exec "$NPM_BIN" run dev
 }
 
 target_test() {
@@ -266,18 +331,25 @@ target_test() {
   # The suite still runs against SQLite; Phase 4 ports it to MySQL and this
   # target grows the SQL tests in Phase 3.
   #
-  # The seed below is a WORKAROUND for a real defect, not housekeeping.
+  # Rebuilding the database below is a WORKAROUND for a real defect, not
+  # housekeeping.
+  #
   # tests/conftest.py builds an isolated temporary database per test, but
   # db/connection.py:connect() resolves its path from the lru_cached GLOBAL
-  # get_settings(), not from the Settings object the test injected. So every
-  # request opens backend/instance/resource_navigator.db instead, and the
-  # suite only passes when that file happens to exist and be seeded -- while
-  # quietly mutating the developer's real database as it runs.
-  # See docs/AUDIT.md "Broken test isolation". Fixed in Phase 4.
-  if [[ ! -f backend/instance/resource_navigator.db ]]; then
-    echo "==> seeding backend/instance (see docs/AUDIT.md: broken test isolation)"
-    ( cd backend && "$PY" manage.py seed >/dev/null )
-  fi
+  # get_settings(), not from the Settings the test injected into create_app.
+  # So every request opens backend/instance/resource_navigator.db instead --
+  # the developer's real database -- and the tests mutate it as they run.
+  #
+  # The suite is therefore NOT idempotent. Measured: against one database it
+  # passes twice, then fails from the third run onward, because allocation
+  # tests drain stock (2505 -> 2460 -> 2430 units) until the partial-
+  # fulfilment test can no longer get a partial result. Deleting and
+  # re-seeding makes the target reproducible; it does not fix the bug.
+  #
+  # See docs/AUDIT.md "Broken test isolation". Fixed properly in Phase 4.
+  echo "==> rebuilding backend/instance (see docs/AUDIT.md: broken test isolation)"
+  rm -rf backend/instance
+  ( cd backend && "$PY" manage.py seed >/dev/null )
   echo "==> backend test suite"
   ( cd backend && "$PY" -m pytest -q )
 }
@@ -287,12 +359,12 @@ target_lint() {
   echo "==> ruff"
   ( cd backend && "$PY" -m ruff check . )
   echo "==> eslint"
-  ( cd frontend && npm run lint )
+  ( cd frontend && "$NPM_BIN" run lint )
 }
 
 target_build() {
   need_node_modules
-  ( cd frontend && npm run build )
+  ( cd frontend && "$NPM_BIN" run build )
 }
 
 target_shell() { connect; exec mysql_db; }

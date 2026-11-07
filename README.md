@@ -118,8 +118,11 @@ Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
   database claim in the opening paragraph describes the target, not today.
 - **Test isolation is broken.** The suite's 51 tests pass, but they run against
   `backend/instance/resource_navigator.db` rather than the isolated temporary
-  database the fixtures build, and they mutate it as they go. Diagnosed, with
-  proof, in `docs/AUDIT.md`; fixed in Phase 4.
+  database the fixtures build, and they mutate it as they go — so the suite is
+  not idempotent, and against one database it starts failing on the third
+  consecutive run. `./run.sh test` rebuilds that database each time to keep the
+  target reproducible. Diagnosed with measurements in `docs/AUDIT.md`; properly
+  fixed in Phase 4.
 - **Semantic search is weak** on the very example the old README led with —
   the semantic term contributes ~0.07 while proximity contributes 1.00. The
   ranking is real and explainable; the signal is not yet good.
