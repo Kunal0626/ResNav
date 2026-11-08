@@ -1166,3 +1166,57 @@ th { font-weight: 600; }
 
 /* Table headers inherited a warm grey from the old beige scheme. */
 table thead th { background: var(--g-fill-2); color: var(--rn-text-3); }
+
+/* ── Read-only demo chrome ──────────────────────────────────────────────
+   Only rendered when VITE_DEMO_MODE=true. Kept in the same ink-and-glass
+   vocabulary as everything else: the banner is a statement of fact, not a
+   warning, so it carries no accent colour. */
+
+.demo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 20px;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--rn-text-2);
+  background: var(--rn-surface);
+  border-bottom: 1px solid var(--rn-border);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.demo-banner svg {
+  margin-top: 3px;
+  color: var(--rn-text-3);
+}
+
+.demo-banner strong {
+  font-weight: 600;
+  color: var(--rn-text);
+}
+
+.demo-banner a {
+  color: var(--rn-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.demo-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--rn-text-2);
+  background: var(--rn-card-bg);
+  border: 1px solid var(--rn-border);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.demo-chip:hover {
+  color: var(--rn-text);
+  border-color: var(--rn-card-border);
+  transform: translateY(-1px);
+}

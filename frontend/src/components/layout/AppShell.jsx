@@ -4,6 +4,7 @@ import { useApi } from '../../hooks/useApi';
 import { useIsDesktop } from '../../hooks/useMediaQuery';
 import { api } from '../../lib/api';
 import { Icon } from '../ui/Icon';
+import { DemoBanner } from '../DemoBanner';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sidebar } from './Sidebar';
 import { ToastViewport } from './ToastViewport';
@@ -62,6 +63,7 @@ export function AppShell() {
         <Sidebar open={navOpen || isDesktop} onClose={closeNav} status={status} />
 
         <div className="main-scroll-area">
+          <DemoBanner />
           <header className="glass-header flex shrink-0 items-center justify-between gap-3">
             <button
               type="button"

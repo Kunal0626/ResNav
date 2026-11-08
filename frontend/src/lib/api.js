@@ -6,25 +6,16 @@
  * the deployed backend.
  */
 
+import { ApiError } from './apiError.js';
+import { demoApi, isDemo } from './demo.js';
+
+// Re-exported so the many call sites that import it from here keep working.
+export { ApiError };
+
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 /** Requests that take longer than this are almost certainly a dead backend. */
 const TIMEOUT_MS = 20000;
-
-export class ApiError extends Error {
-  constructor(message, { status, code, details } = {}) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.details = details;
-  }
-
-  /** True when retrying the same request could plausibly succeed. */
-  get isRetryable() {
-    return this.status === undefined || this.status >= 500;
-  }
-}
 
 async function request(path, { method = 'GET', body, signal, timeout = TIMEOUT_MS } = {}) {
   const controller = new AbortController();
@@ -82,7 +73,7 @@ async function request(path, { method = 'GET', body, signal, timeout = TIMEOUT_M
 const get = (path, options) => request(path, { ...options, method: 'GET' });
 const post = (path, body, options) => request(path, { ...options, method: 'POST', body });
 
-export const api = {
+const realApi = {
   health: (o) => get('/api/health', o),
   ready: (o) => get('/api/ready', o),
 
@@ -97,7 +88,10 @@ export const api = {
   forecastSeries: (o) => get('/api/forecast/series', o),
   explorer: (o) => get('/api/explorer', o),
 
-  stock: ({ lowOnly } = {}, o) => get(`/api/stock${lowOnly ? '?low=1' : ''}`, o),
+  // low_only, not low: the parameter name the API actually reads
+  // (backend/app/api/inventory.py). `?low=1` was silently ignored, so the
+  // Stock page's low-stock filter returned the unfiltered list.
+  stock: ({ lowOnly } = {}, o) => get(`/api/stock${lowOnly ? '?low_only=1' : ''}`, o),
   requests: ({ status } = {}, o) => get(`/api/requests${status ? `?status=${status}` : ''}`, o),
   createRequest: (payload, o) => post('/api/requests', payload, o),
   recommendation: (id, o) => get(`/api/requests/${id}/recommendation`, o),
@@ -117,3 +111,11 @@ export const api = {
     insights: (o) => get('/api/ai/insights', o),
   },
 };
+
+/**
+ * The live client, or the static one when this is a demo build.
+ *
+ * Chosen once at module load from a build-time flag, so a normal build does
+ * not carry the demo transport and cannot accidentally serve snapshots.
+ */
+export const api = isDemo ? demoApi : realApi;

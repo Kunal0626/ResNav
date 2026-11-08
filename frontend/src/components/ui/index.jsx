@@ -223,20 +223,35 @@ export function EmptyState({ icon = 'inbox', title, description, action, classNa
   );
 }
 
-export function ErrorState({ error, onRetry, className, title = 'Could not load this data' }) {
+export function ErrorState({ error, onRetry, className, title }) {
   const retryable = error?.isRetryable ?? true;
+  // A read-only demo refusing a write is working as intended. Showing it in
+  // alert red would read as a broken site.
+  const limit = error?.isDemoLimit === true;
+  // Defaulted per kind, so pages that pass no title say the right thing in
+  // the demo without each one needing to know demo mode exists.
+  // A demo limit overrides the caller's title on purpose: every page's
+  // title says something failed, and nothing did.
+  const heading = limit
+    ? 'Not available in this demo'
+    : (title ?? 'Could not load this data');
   return (
     <div
-      role="alert"
+      role={limit ? 'note' : 'alert'}
       className={cx('flex flex-col items-center px-6 py-14 text-center', className)}
     >
       <span
-        className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10 text-red-500"
+        className={cx(
+          'mb-4 flex h-12 w-12 items-center justify-center rounded-xl',
+          limit
+            ? 'bg-[var(--rn-surface)] text-[var(--rn-text-2)]'
+            : 'bg-red-500/10 text-red-500',
+        )}
         aria-hidden="true"
       >
-        <Icon name="alert" className="h-6 w-6" />
+        <Icon name={limit ? 'info' : 'alert'} className="h-6 w-6" />
       </span>
-      <h3 className="text-sm font-semibold text-[var(--rn-text)]">{title}</h3>
+      <h3 className="text-sm font-semibold text-[var(--rn-text)]">{heading}</h3>
       <p className="mt-1.5 max-w-md text-xs leading-relaxed text-[var(--rn-text-3)]">
         {error?.message || 'An unexpected error occurred.'}
       </p>

@@ -17,6 +17,7 @@ import {
   TableWrap,
 } from '../components/ui';
 import { Icon } from '../components/ui/Icon';
+import { isDemo } from '../lib/demo';
 import { useToast } from '../contexts/ToastContext';
 import { useAction, useApi } from '../hooks/useApi';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -344,9 +345,21 @@ function NewRequestForm({ reference, onCreated }) {
             />
           </Field>
 
-          <Button type="submit" variant="primary" icon="plus" className="w-full" loading={create.pending}>
+          <Button
+            type="submit"
+            variant="primary"
+            icon="plus"
+            className="w-full"
+            loading={create.pending}
+            disabled={isDemo}
+          >
             Create request
           </Button>
+          {isDemo ? (
+            <p className="text-center text-[0.6875rem] text-[var(--rn-text-3)]">
+              Disabled in the demo &mdash; there is no database behind it to write to.
+            </p>
+          ) : null}
         </form>
       </CardBody>
     </Card>
@@ -493,7 +506,12 @@ function AllocationDialog({ request, onClose, onAllocated }) {
                 icon="truck"
                 onClick={commit}
                 loading={allocate.pending}
-                disabled={!plan.providers?.length}
+                disabled={isDemo || !plan.providers?.length}
+                title={
+                  isDemo
+                    ? 'The allocation runs as a stored procedure inside MySQL. This demo has no database.'
+                    : undefined
+                }
               >
                 Dispatch {formatNumber(plan.providers?.reduce((sum, leg) => sum + leg.allocate_qty, 0) ?? 0)} units
               </Button>

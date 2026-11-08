@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DemoExamples } from '../components/DemoExamples';
 import { KpiCard } from '../components/KpiCard';
 import { InsightList } from '../components/InsightList';
 import { RiskMap } from '../components/RiskMap';
@@ -40,11 +41,20 @@ export function Home() {
   const fetchOverview = useCallback(({ signal }) => api.overview({ signal }), []);
   const { data, error, loading, refresh } = useApi(fetchOverview);
 
+  // Takes the text directly, so the form and the demo's example chips share
+  // one path to the results page.
+  const go = useCallback(
+    (text) => {
+      const trimmed = String(text ?? '').trim();
+      if (!trimmed) return;
+      navigate('/results', { state: { query: trimmed, coords, fallback } });
+    },
+    [navigate, coords, fallback],
+  );
+
   const onSubmit = (event) => {
     event.preventDefault();
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    navigate('/results', { state: { query: trimmed, coords, fallback } });
+    go(query);
   };
 
   return (
@@ -57,6 +67,7 @@ export function Home() {
         denied={denied}
         locating={locating}
         onLocate={locate}
+        onPickExample={go}
       />
 
       {error ? (
@@ -181,7 +192,16 @@ export function Home() {
   );
 }
 
-function SearchHero({ query, onQueryChange, onSubmit, fallback, denied, locating, onLocate }) {
+function SearchHero({
+  query,
+  onQueryChange,
+  onSubmit,
+  fallback,
+  denied,
+  locating,
+  onLocate,
+  onPickExample,
+}) {
   return (
     <Card className="page-hero overflow-hidden">
       <div className="p-6 sm:p-8">
@@ -221,6 +241,8 @@ function SearchHero({ query, onQueryChange, onSubmit, fallback, denied, locating
             Search
           </Button>
         </form>
+
+        <DemoExamples onPick={onPickExample} className="mt-5" />
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.6875rem] text-[var(--rn-text-3)]">
           {locating ? (

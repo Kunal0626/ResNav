@@ -11,6 +11,7 @@ import {
   Progress,
   SkeletonCard,
 } from '../components/ui';
+import { DemoExamples } from '../components/DemoExamples';
 import { Icon } from '../components/ui/Icon';
 import { useApi } from '../hooks/useApi';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -130,6 +131,15 @@ export function Results() {
       {error ? (
         <Card>
           <ErrorState error={error} onRetry={refresh} title="Search failed" />
+          {error.isDemoLimit ? (
+            <DemoExamples
+              className="px-6 pb-8"
+              onPick={(q) => {
+                setQuery(q);
+                setSubmitted(q);
+              }}
+            />
+          ) : null}
         </Card>
       ) : loading ? (
         <div className="space-y-4">

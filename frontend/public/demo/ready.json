@@ -1,0 +1,1 @@
+{"checks":{"database":{"connected":true,"tables":17},"integrity":{"foreign_key_violations":0,"foreign_keys_declared":17},"schema":{"core_tables":true}},"status":"ready"}
