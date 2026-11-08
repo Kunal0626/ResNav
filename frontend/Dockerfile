@@ -27,5 +27,11 @@ FROM nginx:1.27-alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
+# 127.0.0.1, not localhost. Inside the container /etc/hosts maps localhost to
+# both 127.0.0.1 and ::1, nginx's `listen 80` binds IPv4 only, and BusyBox
+# wget tries the IPv6 address and gives up instead of falling back. The
+# result was a container that served every request correctly and still
+# reported itself unhealthy. (The API's check survives the same /etc/hosts
+# because curl does fall back; wget does not.)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost/ >/dev/null || exit 1
+    CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
