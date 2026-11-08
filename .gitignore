@@ -65,3 +65,6 @@ tests/**/*.actual
 
 # local editor / assistant config
 .claude/
+
+# Vercel CLI project link (ids are local, not source)
+.vercel/
