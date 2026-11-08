@@ -19,6 +19,7 @@
 #   web      run the Vite development server (http://localhost:5173)
 #   test     run the backend test suite and the SQL tests
 #   concurrency  two-session race, isolation and deadlock experiments
+#   bench    measure allocation latency, the index, and the views
 #   db-local verify the local MySQL, then build and seed it
 #   docker   build and run the whole stack in containers
 #   docker-down  stop it (add -v to drop the database volume too)
@@ -508,6 +509,13 @@ target_docker_down() {
   "$DOCKER_BIN" compose down "$@"
 }
 
+# Every number in the README comes from here, so it has to be re-runnable
+# by anyone who clones the repository.
+target_bench() {
+  load_env; need_venv; require_db_credentials
+  "$PY" -I bench/measure.py "$@"
+}
+
 target_demo()   { not_yet demo 9; }
 
 usage() {
@@ -537,6 +545,7 @@ main() {
     build)   target_build ;;
     demo)    target_demo ;;
     concurrency) target_concurrency "$@" ;;
+    bench)   target_bench "$@" ;;
     db-local) target_db_local ;;
     docker)  target_docker "$@" ;;
     docker-down) target_docker_down "$@" ;;

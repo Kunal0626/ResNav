@@ -1,105 +1,157 @@
 # ResNav
 
-**Disaster-relief resource allocation, where the database is the source of truth.**
+**Disaster-relief logistics where the database is the source of truth.**
 
-React SPA → Flask JSON API → MySQL 8. Relief centres hold stock; disaster zones
-raise requests; the system ranks candidate centres by real distance and commits
-an allocation atomically, with the constraints, triggers and stored procedures —
-not the application code — guaranteeing that stock never goes negative and the
-same unit is never promised twice. Eight analytical modules sit on top as pure
-Python with no database access of their own.
+React SPA → Flask JSON API → MySQL 8. Relief centres hold stock; disaster
+zones raise requests; the system ranks candidate centres by real distance and
+commits an allocation atomically — with constraints, triggers and stored
+procedures, not application code, guaranteeing that stock never goes negative
+and the same unit is never promised twice.
 
-> **Status: mid-build, and this README does not describe a finished product.**
-> The repository currently holds a working SQLite-backed application (imported
-> from an earlier project, ResNav AI) plus the design and tooling for the MySQL
-> layer that will replace it. **The MySQL layer does not exist yet.** The
-> roadmap below says exactly what is built and what is not.
->
-> Nothing in this file is a claim about performance. There are no measured
-> numbers here yet; when there are, they will come from a script in this repo
-> and will record the machine and versions alongside them.
+Eight analytical modules sit on top as pure Python with no database access of
+their own.
+
+<p align="center">
+  <img src="docs/screenshots/overview-dark.jpg" alt="The ResNav overview: a floating navigation panel, a pill header and a row of metric tiles over a dark background" width="840">
+</p>
 
 ---
 
-## Where this came from
+## Why it is built this way
 
-Two projects merged into one:
+The allocation decision used to live in Python, over SQLite. That was safe,
+but only by accident: SQLite's `BEGIN IMMEDIATE` takes a database-wide write
+lock, so there was never a second writer to race with.
 
-- **ResNav AI** — a Flask + React application with semantic relief-centre
-  search, explainable ranking, a request queue, allocation planning, eight
-  analytics modules, atomic dispatch and an audit log, all over SQLite.
-- **Disaster Resource Allocation** (this repository) — a database design
-  exercise: normalized schema, triggers, stored procedures, transactions and
-  concurrency experiments in MySQL.
+MySQL has row-level locking and many concurrent writers. Porting the same
+logic across unchanged would have introduced an oversell bug that SQLite had
+been hiding — so the decision moved into the database, behind locks taken in
+a fixed order. [`docs/CONCURRENCY.md`](docs/CONCURRENCY.md) demonstrates the
+bug, the half-fix and the fix, with captured output from scripts you can run.
 
-[`docs/AUDIT.md`](docs/AUDIT.md) is the measured record of what ResNav actually
-did before the merge: which of its README's claims held up, which did not, and
-the defects found. [`docs/MAPPING.md`](docs/MAPPING.md) then reconciles the two
-schemas into one, with the usage evidence behind every keep, drop and add. It is the reason this README is allowed to say what it says.
-[`docs/RESNAV_ORIGINAL_README.md`](docs/RESNAV_ORIGINAL_README.md) is the old
-README, kept for provenance — treat its claims as unverified unless
-`docs/AUDIT.md` confirms them.
+That is the whole argument of the project, and it is measured rather than
+asserted.
 
-## Roadmap
-
-| Phase | What | Status |
-|---|---|---|
-| 0 | Audit ResNav: build it from scratch, measure every claim | **done** — [`docs/AUDIT.md`](docs/AUDIT.md) |
-| 1 | Restructure the repo, import ResNav, unify configuration | **done** |
-| 2 | Unified data model: old→new mapping, ER diagram, 3NF/BCNF | **done** — [`MAPPING.md`](docs/MAPPING.md), [`DESIGN.md`](docs/DESIGN.md), [`NORMALIZATION.md`](docs/NORMALIZATION.md) |
-| 3 | The MySQL layer: DDL, triggers, procedures, views, SQL tests | **done** — `make schema`, 14 SQL tests |
-| 4 | Port the backend from SQLite to MySQL; dispatch calls the procedure | **done** |
-| 5 | One deterministic seed, plus a tiny hand-checkable set | **done** — `make reset` |
-| 6 | Concurrency proof: oversell, isolation levels, deadlock | **done** — [`CONCURRENCY.md`](docs/CONCURRENCY.md) |
-| 7 | Surface alerts, audit log and "why this centre" in the UI | **done** — [screenshots](docs/screenshots/) |
-| 8 | Run anywhere: Docker and a no-Docker local path | **done** — both tested |
-| 9 | Measure, rewrite this README, interview notes | not started |
-
-## Layout
-
-```
-backend/     Flask app factory, 6 API blueprints, 8 AI modules, services,
-             the data layer (SQLite today, MySQL from Phase 4), 51 tests
-frontend/    React 18 + Vite SPA, 15 routes, design-token CSS
-db/          the MySQL layer — schema, triggers, procedures, views, seed,
-             SQL tests. Empty until Phase 3; see db/README.md for the contract
-docs/        design, audit, and the write-ups each phase produces
-tools/       capabilities.sql (server feature probe), check_mermaid.py
-```
-
-## The data
-
-`make reset` builds the schema and loads a deterministic seed — same bytes
-every time, from a fixed generator seed, so a number reproduced from this
-README is the same number:
+## What is in the database
 
 | | |
 |---|---|
-| relief centres | 30, across 21 cities and 16 states |
-| resources | 45 |
-| disaster zones | 12 |
-| stock rows | 596, of which 82 open at zero |
-| total units held | 108,150 |
-| stock movement history | 2,345 rows |
-| open requests | 600 |
+| tables | 17 |
+| foreign keys | 17 — `RESTRICT` by default, so relief history cannot be tidied away |
+| `CHECK` constraints | 22 |
+| triggers | 10 |
+| stored routines | 5 |
+| views | 9 |
 
-Regenerate with `python3 db/seed/generate.py`; `--check` verifies the
-committed files are current. The totals above come from
-[`db/seed/MANIFEST.json`](db/seed/MANIFEST.json), which the generator writes
-from the same data it emits, so they cannot drift.
+All hand-written. No ORM, no migration framework generating it.
 
-The tests use a separate, deliberately tiny set — three centres, two
-resources, one zone — documented in
-[`db/tests/EXPECTED.md`](db/tests/EXPECTED.md), where every expected number is
-worked out on paper.
+The centrepiece is `sp_allocate_request`: it takes every lock it needs up
+front in primary-key order, re-reads the quantities *after* holding them, and
+only then allocates — nearest centre first by `fn_haversine_km`. Locking in
+distance order would be a different order per zone, and two zones would lock
+the same centres oppositely. That is a deadlock, and
+[`docs/CONCURRENCY.md`](docs/CONCURRENCY.md) causes one on purpose to show it.
 
-## Getting started
+## Measured results
 
-**Prerequisites:** Python 3.11+, Node 20+, MySQL 8.0.16+. 8.0.16 is the floor
-because that is the version where `CHECK` constraints began to be *enforced*
-rather than parsed and ignored. Development is on MySQL 9.5.0.
+From `make bench` ([`bench/measure.py`](bench/measure.py)) on an Apple M3,
+MySQL 9.5.0, against the deterministic seed — 30 centres, 45 resources, 596
+stock rows, 600 requests. Full detail and caveats in
+[`docs/RESULTS.md`](docs/RESULTS.md).
 
-Create the database and an account for it, as a MySQL administrator:
+| | |
+|---|---|
+| allocation, end to end | **p50 0.542 ms**, p95 0.938 ms, p99 1.018 ms (n=60) |
+| throughput | **1,845 allocations/sec**, single session |
+| `fn_haversine_km` | p50 0.058 ms |
+| heaviest view | `v_request_fulfilment`, 660 rows, p50 11.0 ms |
+| tests | 55 Python + 14 SQL, plus 6 concurrency experiments |
+
+**The honest index result:** the secondary index on
+`StockLevels (resource_id, provider_id)` makes **no measurable difference** at
+this data size — 0.184 ms without, 0.195 ms with. Without it the optimiser
+just reverses the join across 30 providers. It cannot be dropped either:
+`fk_stocklevels_resource` requires it (MySQL error 1553). On a 200,000-row
+table of the same shape it is **21.7× faster**, so it is insurance against
+growth rather than a win today. That is what the measurement says, so that is
+what this says.
+
+Throughput above is single-session, not a concurrency measurement.
+Concurrent capacity was **not measured**.
+
+## Screenshots
+
+| | |
+|---|---|
+| [Standing low-stock alerts](docs/screenshots/stock-alerts.jpg) | Raised by a trigger when stock crossed its threshold, resolved automatically on recovery |
+| [Dispatch plan](docs/screenshots/allocation-plan.jpg) | Distances 3.8 → 833.6 km, strictly increasing: the database orders candidates by the same expression the dispatch uses |
+| [Audit trail](docs/screenshots/audit-log.jpg) | Append-only. The `stock_update` rows are written by a trigger, so no caller can skip them |
+
+The interface is monochrome by design. Almost everything on screen is a
+*state* — critical, short, healthy, overdue — so colour is reserved for
+meaning and then removed entirely: severity is carried by ink, with critical
+inverted, warning outlined and healthy quiet. `tools/check_monochrome.py`
+fails the build if a hue returns.
+
+## Architecture
+
+```
+┌──────────────────────────┐      ┌───────────────────────────────┐
+│  frontend/   React SPA   │      │  backend/   Flask JSON API    │
+│                          │      │                               │
+│  pages ─▶ hooks ─▶ api ──┼─HTTP─┼─▶ api/ (6 blueprints)         │
+│    │                     │ JSON │      │                        │
+│    ▼                     │      │      ▼                        │
+│  components · contexts   │      │   services/ ──▶ ai/ (8, pure) │
+│  monochrome glass system │      │      │                        │
+└──────────────────────────┘      │      ▼                        │
+                                  │   db/ ──▶ PyMySQL             │
+                                  └───────────┬───────────────────┘
+                                              │ CALL / SELECT
+                                  ┌───────────▼───────────────────┐
+                                  │  db/   MySQL 8                │
+                                  │                               │
+                                  │  sp_allocate_request          │
+                                  │    ordered SELECT ... FOR     │
+                                  │    UPDATE, nearest-first      │
+                                  │  10 triggers · 22 CHECKs      │
+                                  │  9 views · 17 FKs             │
+                                  └───────────────────────────────┘
+```
+
+The AI modules never touch the database — they take plain dictionaries, which
+is what makes them unit-testable. The data layer never makes an allocation
+decision — that is the procedure's job.
+
+## Running it
+
+**Prerequisites:** Python 3.11+, Node 20+, and either Docker or MySQL 8.0.16+.
+8.0.16 is the floor because that is the version where `CHECK` constraints
+began to be *enforced* rather than parsed and ignored.
+
+### With Docker
+
+```bash
+cp .env.example .env && chmod 600 .env   # set DRA_MYSQL_PASSWORD and SECRET_KEY
+make docker
+```
+
+MySQL, the API and the SPA behind nginx; schema and seed applied on first
+start; the app at **http://localhost:8080**. `make docker-down -v` tears it
+down including the data volume.
+
+The container runs **MySQL 8.4**, which is what tests this project's
+"8.0.16+" claim rather than asserting it — development is on 9.5.0.
+
+### Without Docker
+
+```bash
+make install
+make db-local     # verifies the server, then builds and seeds it
+make api          # and `make web` in a second terminal
+```
+
+Create the database and an account for it first, as a MySQL administrator:
 
 ```sql
 CREATE USER IF NOT EXISTS 'resnav_app'@'localhost' IDENTIFIED BY '<password>';
@@ -109,131 +161,72 @@ GRANT ALL PRIVILEGES ON resnav.* TO 'resnav_app'@'localhost';
 GRANT SELECT ON performance_schema.* TO 'resnav_app'@'localhost';
 ```
 
-Rights on the project's own schema are all that is needed — `./run.sh check`
-creates its scratch objects inside `resnav` rather than in a database of its
-own, precisely so the account never needs a global `CREATE`.
+If your server has binary logging on, you also need
+`SET PERSIST log_bin_trust_function_creators = 1` — without it a non-`SUPER`
+account cannot create triggers or stored functions (error 1419).
+`make check` tells you whether you need it.
 
-**If your server has binary logging enabled**, you will also need:
+One `.env` at the repository root configures the database, the API and the
+frontend together. Your password is never put on a command line: `run.sh`
+writes a `chmod 600` temporary defaults file and passes
+`--defaults-extra-file`, so it stays out of `ps` and shell history.
 
-```sql
-SET PERSIST log_bin_trust_function_creators = 1;
-```
+### Every target
 
-Without it MySQL refuses to let a non-`SUPER` account create triggers or
-stored functions (error 1419), because a non-deterministic routine written to
-the binary log can compute a different result on a replica and silently drift.
-This project's functions are declared `DETERMINISTIC NO SQL`, and a
-single-node development server has no replica to drift from. `./run.sh check`
-tells you whether you need this. `SET PERSIST` survives a restart.
-
-```bash
-./run.sh install                      # backend venv + frontend dependencies
-cp .env.example .env && chmod 600 .env   # then edit it
-./run.sh check                        # verify MySQL access and features
-```
-
-One `.env` at the repo root configures the database, the API and the frontend
-together. `run.sh` parses it and exports every key before starting anything,
-because the Flask settings layer reads the process environment directly.
-
-Your MySQL password is never put on a command line. `run.sh` writes a
-`chmod 600` temporary defaults file and passes `--defaults-extra-file`, so the
-password stays out of `ps` output and shell history.
-
-### Two ways to run it
-
-**Containers** — nothing on your machine but Docker:
-
-```bash
-cp .env.example .env && chmod 600 .env   # set DRA_MYSQL_PASSWORD and SECRET_KEY
-make docker
-```
-
-That builds MySQL, the API and the SPA behind nginx, applies the schema and
-the seed on first start, and serves the app at **http://localhost:8080**.
-`make docker-down` stops it; add `-v` to drop the database volume so the
-schema initialisation runs again.
-
-The container runs **MySQL 8.4**, which is what finally *tests* this
-project's "8.0.16+" claim rather than asserting it — development is on 9.5.0.
-Same triggers, same `CHECK` errors, same `fn_haversine_km` result to three
-decimal places.
-
-**Locally** — against a MySQL server you already run, which is what the
-project is developed against and what every measurement in the docs was
-taken on:
-
-```bash
-make install
-make db-local     # verifies the server, then builds and seeds it
-make api          # and `make web` in a second terminal
-```
-
-### Running it
-
-```bash
-./run.sh api     # Flask on http://127.0.0.1:5001
-./run.sh web     # Vite on http://localhost:5173, proxying /api
-```
-
-`make` delegates to `run.sh` for every target, so the two cannot drift apart.
-
-| Target | Does | Works today |
+| | | |
 |---|---|---|
-| `install` | backend venv + `npm install` | yes |
-| `check` | MySQL access and SQL feature probe | yes |
-| `docs` | grammar-check the Mermaid diagrams | yes |
-| `test` | backend suite + SQL suite | yes — 53 + 14 tests |
-| `concurrency` | two-session race, isolation and deadlock experiments | yes — 6 experiments |
-| `lint` | `ruff` + `eslint` | yes |
-| `build` | production frontend build | yes |
-| `api` / `web` | development servers | yes |
-| `schema` | create tables, triggers, procedures, views | yes |
-| `db-local` | verify the local MySQL, then build and seed it | yes |
-| `docker` / `docker-down` | the whole stack in containers | yes |
-| `seed` / `reset` | load sample data / rebuild everything | yes |
-| `demo` | end-to-end worked demo | **no** — Phase 8 |
+| `make install` | backend venv + `npm install` | |
+| `make check` | MySQL access and a 15-point SQL feature probe | |
+| `make db-local` | verify, build and seed the local database | |
+| `make docker` / `docker-down` | the whole stack in containers | |
+| `make api` / `make web` | development servers | |
+| `make test` | 55 Python + 14 SQL tests | |
+| `make concurrency` | 6 two-session experiments | ~30 s |
+| `make bench` | the measurements in `docs/RESULTS.md` | |
+| `make lint` | ruff, eslint, and the monochrome check | |
+| `make build` | production frontend build | |
+| `make docs` | grammar-check the Mermaid diagrams | |
 
-Targets that are not built yet fail with the phase they arrive in rather than
-pretending to succeed.
-
-## Screenshots
-
-Captured from the running app against the deterministic seed, so every number
-is reproducible with `make reset`. See
-[`docs/screenshots/`](docs/screenshots/README.md).
+## Documentation
 
 | | |
 |---|---|
-| [Standing low-stock alerts](docs/screenshots/stock-alerts.jpg) | Raised by a trigger when stock crossed its threshold, resolved automatically when it recovers |
-| [Audit trail](docs/screenshots/audit-log.jpg) | Append-only. The `stock_update` rows are written by a trigger, so no caller can skip them |
-| [Allocation plan](docs/screenshots/allocation-plan.jpg) | Distances 3.8 → 593.3 → 663.8 → 788.0 → 833.8 km: nearest-first, ordered by the database |
+| [`DESIGN.md`](docs/DESIGN.md) | The schema argument: ER diagram, keys, where each invariant is enforced |
+| [`NORMALIZATION.md`](docs/NORMALIZATION.md) | One flat table to BCNF, with the anomaly removed at each step |
+| [`CONCURRENCY.md`](docs/CONCURRENCY.md) | Six experiments: oversell, isolation levels, a deliberate deadlock |
+| [`RESULTS.md`](docs/RESULTS.md) | Every measured number, with the machine and versions |
+| [`MAPPING.md`](docs/MAPPING.md) | How two schemas became one, with the usage evidence |
+| [`AUDIT.md`](docs/AUDIT.md) | What the predecessor actually did before the merge |
+| [`INTERVIEW_NOTES.md`](docs/INTERVIEW_NOTES.md) | Decisions and their cost; fifteen hard questions |
+| [`DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Where this could be hosted, and why most free tiers cannot run it |
 
 ## Limitations and known defects
 
-Kept here deliberately. See [`docs/AUDIT.md`](docs/AUDIT.md) for the evidence.
+Kept deliberately. Nothing here is hidden in a commit message.
 
-- **No allocations are pre-seeded.** The 600 requests all start `pending`,
-  because allocating them is what the demo, the tests and the concurrency
-  scripts *do* — a seed that had already run it would hide whether it works.
-- **Running the tests overwrites the development data.** The suite reloads
-  the seed before every test, so the tests are isolated from each other, but
-  by default they share the development database. `./run.sh test` reloads the
-  seed afterwards, and the seed is deterministic, so nothing is lost. Set
-  `DRA_MYSQL_TEST_DB` to use a separate database (which needs its own
-  `GRANT ALL`).
-- **Semantic search is weak** on the very example the old README led with —
-  the semantic term contributes ~0.07 while proximity contributes 1.00. The
-  ranking is real and explainable; the signal is not yet good.
-
-- **`npm audit` reports high and moderate vulnerabilities**, not yet triaged.
+- **Concurrent throughput was not measured.** Phase 6 proves correctness
+  under contention; it does not measure capacity. The single-session figure
+  above is not a capacity number.
+- **Semantic search is weak.** On the example the project led with, intent
+  classifies as `unknown` at 18.6% confidence and the semantic term
+  contributes ~0.07 against proximity's 1.00. The ranking is real and
+  explainable; the signal is not yet good.
 - **No authentication.** Every caller can allocate.
-- **No deployment.** Nothing has been deployed anywhere; no hosting account
-  exists. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) has the research and the
-  recommendation — the short version is that most of the 2026 free tier
-  cannot run this project at all, because TiDB (the usual free
-  "MySQL-compatible" answer) supports neither triggers nor stored
-  procedures.
+- **No expiry or batch tracking.** `StockLevels` has no batches, so
+  perishable stock cannot be allocated oldest-first. The largest gap in the
+  data model.
+- **Running the tests overwrites the development data.** The suite reloads
+  the seed before every test, so tests are isolated from each other, but by
+  default they share the `resnav` database. Set `DRA_MYSQL_TEST_DB` to use a
+  separate one.
+- **Capacity is reported but not enforced.** Providers have no storage limit.
+- **Nothing is deployed**, and no hosting account exists. See
+  [`DEPLOYMENT.md`](docs/DEPLOYMENT.md) — most of the 2026 free tier cannot
+  run this at all, because TiDB, the usual free "MySQL-compatible" answer,
+  supports neither triggers nor stored procedures.
+- **`npm audit` reports vulnerabilities**, not yet triaged.
+- **One machine, one run each.** No cross-platform or cross-version
+  benchmarking beyond MySQL 8.4 in the container.
 
 ## Licence
 

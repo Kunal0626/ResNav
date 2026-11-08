@@ -6,7 +6,7 @@
 # .PHONY because these are actions, not files. Without it, a directory named
 # "test" would make `make test` decide there was nothing to do.
 
-.PHONY: help install check docs schema seed reset api web test concurrency lint build demo shell db-local docker docker-down
+.PHONY: help install check docs schema seed reset api web test concurrency lint build demo shell bench db-local docker docker-down
 
 help:
 	@./run.sh --help || true
@@ -17,6 +17,7 @@ docs:    ; @./run.sh docs
 schema:  ; @./run.sh schema
 seed:    ; @./run.sh seed
 reset:   ; @./run.sh reset
+bench:   ; @./run.sh bench
 db-local: ; @./run.sh db-local
 docker:  ; @./run.sh docker
 docker-down: ; @./run.sh docker-down
