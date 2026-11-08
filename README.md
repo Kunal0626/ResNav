@@ -204,9 +204,10 @@ writes a `chmod 600` temporary defaults file and passes
 
 Kept deliberately. Nothing here is hidden in a commit message.
 
-- **Concurrent throughput was not measured.** Phase 6 proves correctness
-  under contention; it does not measure capacity. The single-session figure
-  above is not a capacity number.
+- **Concurrent throughput was not measured.** The experiments in
+  [`CONCURRENCY.md`](docs/CONCURRENCY.md) prove correctness under
+  contention; they do not measure capacity. The single-session figure above
+  is a latency reciprocal, not a capacity number.
 - **Semantic search is weak.** On the example the project led with, intent
   classifies as `unknown` at 18.6% confidence and the semantic term
   contributes ~0.07 against proximity's 1.00. The ranking is real and
