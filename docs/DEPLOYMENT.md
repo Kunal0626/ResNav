@@ -189,7 +189,7 @@ stack, or the first certificate attempt fails and backs off.
 ```
 sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
 sudo usermod -aG docker $USER && newgrp docker
-git clone https://github.com/Kunal0626/disaster-resource-allocation.git resnav && cd resnav
+git clone https://github.com/Kunal0626/ResNav.git resnav && cd resnav
 cp .env.example .env
 ```
 

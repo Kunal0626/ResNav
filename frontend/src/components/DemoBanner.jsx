@@ -1,7 +1,7 @@
 import { isDemo } from '../lib/demo';
 import { Icon } from './ui/Icon';
 
-const REPO_URL = 'https://github.com/Kunal0626/disaster-resource-allocation';
+const REPO_URL = 'https://github.com/Kunal0626/ResNav';
 
 /**
  * Says, on every page, that this deployment has no backend.
