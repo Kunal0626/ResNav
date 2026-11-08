@@ -62,3 +62,6 @@ tests/**/*.actual
 # knows how to start this project. Everything else under .claude/ is personal.
 .claude/*
 !.claude/launch.json
+
+# local editor / assistant config
+.claude/
