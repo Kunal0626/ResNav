@@ -119,6 +119,20 @@ appears dead.
 
 ## 1. The machine
 
+Two things to get right before clicking anything, because one is permanent
+and the other quietly breaks the deploy:
+
+**The home region is chosen once, at signup, and cannot be changed.** Always
+Free resources only exist in it. Pick one you are near -- `ap-mumbai-1` or
+`ap-hyderabad-1` from India.
+
+**Do not fall back to the `VM.Standard.E2.1.Micro` shape.** It is also Always
+Free and it is the default the console offers, but it has 1 GB of RAM. This
+stack is MySQL 8.4 plus gunicorn with scikit-learn imported, plus nginx and
+Caddy; it will not fit, and the failure mode is the OOM killer taking out
+mysqld mid-request rather than an honest refusal to start. If A1 capacity is
+unavailable, retry or change availability domain -- do not downgrade.
+
 Oracle Cloud -> Compute -> Instances -> Create.
 
 - **Shape:** `VM.Standard.A1.Flex` (Ampere, arm64). Always Free covers up to
