@@ -70,7 +70,9 @@ services:
         condition: service_healthy
     ports:
       # Exposed for curl and the concurrency scripts; the SPA does not use it.
-      - '8000:8000'
+      # Bound to the loopback deliberately: on a public VM this must not be
+      # a second, uncertificated way into the API. Caddy is the only door.
+      - '127.0.0.1:8000:8000'
     restart: unless-stopped
 
   web:
@@ -82,7 +84,10 @@ services:
       api:
         condition: service_healthy
     ports:
-      - '8080:80'
+      # Loopback for the same reason as the API above. Locally this is still
+      # http://localhost:8080; in production Caddy reaches it over the
+      # compose network, which does not involve this binding at all.
+      - '127.0.0.1:8080:80'
     restart: unless-stopped
 
 volumes:

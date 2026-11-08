@@ -1,9 +1,12 @@
 # Deploying this
 
-**Nothing is deployed.** No hosting account has been created, no provider
-configured and nothing paid for. This is the research, so the decision can be
-made with the trade-offs visible. Researched 2026-11-07; free tiers move
-quickly, so check the pricing pages before acting on any of it.
+Two parts: **why the shape is what it is** (the research), and **the runbook**
+for putting it live. The decision taken was the VM option -- the SPA on
+Vercel, everything else on one Always Free machine -- because it is the only
+one that keeps the triggers and stored procedures the project is about.
+
+Researched 2026-11-07, re-checked 2026-11-08. Free tiers move quickly, so
+check the pricing pages before acting on any of it.
 
 ## The constraint that decides everything
 
@@ -94,3 +97,152 @@ triggers.
 - [Platforms with a real free tier for developers in 2026](https://render.com/articles/platforms-with-a-real-free-tier-for-developers-in-2026) — vendor source, weigh accordingly
 - [State of Free Hosting 2026](https://snapdeploy.dev/state-of-free-hosting)
 - [Free database hosting (community-maintained list)](https://gist.github.com/bmaupin/0ce79806467804fdbbf8761970511b8c)
+
+---
+
+# The runbook
+
+## What is tested and what is not
+
+Everything in `deploy/` was brought up and exercised on an Apple Silicon Mac
+before being written down: Caddy issued a certificate, the SPA loaded over
+HTTPS, `/api/health` answered through the proxy, and a `POST .../allocate`
+moved exactly 400 units out of `StockLevels` through TLS. Apple Silicon is
+arm64, the same architecture as Oracle's Ampere instances, so the images are
+known to build there.
+
+**The Oracle-specific steps below have not been run** -- creating the account
+needs a card and an identity, which is yours to do. They come from Oracle's
+documentation, not from a machine I had. Treat the firewall step especially
+as the one most likely to bite; it is the usual reason a new Oracle VM
+appears dead.
+
+## 1. The machine
+
+Oracle Cloud -> Compute -> Instances -> Create.
+
+- **Shape:** `VM.Standard.A1.Flex` (Ampere, arm64). Always Free covers up to
+  4 OCPU / 24 GB across your A1 instances; 1 OCPU / 6 GB is plenty here.
+- **Image:** Ubuntu 22.04 or 24.04.
+- **Networking:** assign a public IPv4. Save the SSH key it offers -- there
+  is no second chance.
+
+If capacity errors appear ("Out of host capacity"), that is normal for A1 in
+busy regions. Retry, or pick a different availability domain.
+
+## 2. Open the ports -- both firewalls
+
+This is the step people miss. Oracle filters traffic in **two** places and
+you must open both.
+
+**a. The cloud side.** VCN -> Security Lists -> the subnet's default list ->
+Add Ingress Rules. Source `0.0.0.0/0`, TCP, destination ports **80** and
+**443**.
+
+**b. The machine side.** Oracle's Ubuntu images ship with iptables rules that
+drop everything except SSH:
+
+```
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+On an Oracle Linux image it is firewalld instead:
+
+```
+sudo firewall-cmd --permanent --add-service=http --add-service=https && sudo firewall-cmd --reload
+```
+
+Do not skip (b) because (a) looks done. A half-open path presents as Caddy
+retrying the ACME challenge forever with no obvious cause.
+
+## 3. A hostname
+
+Caddy needs a name to get a certificate for; a bare IP cannot have one from
+Let's Encrypt. A free subdomain is enough -- [DuckDNS](https://www.duckdns.org)
+gives you `something.duckdns.org` pointed at your IP in about a minute.
+`duckdns.org` is on the Public Suffix List, which matters: it means Let's
+Encrypt counts your subdomain separately for rate limits rather than
+lumping it in with every other user of the parent domain. `nip.io` and
+`sslip.io` are not, so they run into shared rate limits.
+
+Point it at the VM's public IP and confirm it resolves before starting the
+stack, or the first certificate attempt fails and backs off.
+
+## 4. Bring it up
+
+```
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER && newgrp docker
+git clone https://github.com/Kunal0626/disaster-resource-allocation.git resnav && cd resnav
+cp .env.example .env
+```
+
+Edit `.env`:
+
+- `DRA_MYSQL_PASSWORD` and `DRA_MYSQL_ROOT_PASSWORD` -- generate them, do not
+  reuse anything (`openssl rand -base64 24`)
+- `SECRET_KEY` -- likewise
+- `RESNAV_DOMAIN` -- the DuckDNS name from step 3
+- `CORS_ORIGINS` -- the Vercel origin from step 5, exactly, no trailing slash
+
+Then:
+
+```
+docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+```
+
+First boot applies the schema, routines and seed, which takes a minute or
+two. `docker compose ps` should show db, api and web healthy and caddy
+running. The whole app is then live at `https://<your-domain>` -- the VM
+serves a complete copy, which is worth checking before involving Vercel.
+
+## 5. The SPA on Vercel
+
+From the repository root:
+
+```
+npx vercel --cwd frontend
+```
+
+Set one environment variable in the Vercel project, for all environments:
+
+```
+VITE_API_BASE_URL = https://<your-domain>
+```
+
+Redeploy after setting it -- Vite inlines environment variables at build
+time, so a variable added after a build does not reach the bundle.
+
+Then put the Vercel origin into `CORS_ORIGINS` in `.env` on the VM and
+`docker compose ... up -d api` to pick it up. Without this the browser
+blocks every call with a CORS error while `curl` keeps working, which is a
+confusing way to lose an evening.
+
+## 6. Keeping the demo honest (optional)
+
+The API is public and writable, so a visitor can allocate stock until there
+is none left. A nightly reseed keeps it presentable:
+
+The seed is four ordered files, not one, and `docker/mysql-init.sh` already
+knows the order -- so the reset is to drop the schema and re-run that same
+script rather than to pipe any single file:
+
+```
+0 3 * * * cd ~/resnav && docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE \`$MYSQL_DATABASE\`; CREATE DATABASE \`$MYSQL_DATABASE\`;"' && docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml exec -T db sh /docker-entrypoint-initdb.d/10-resnav.sh
+```
+
+Run locally, that restored 17 tables, 9 views, 10 triggers, 5 routines and
+the full 108150 units of stock, and cleared the allocations back to zero.
+The API needs no restart: it opens a connection per request, so it rides
+through the database being dropped underneath it.
+
+## Teardown
+
+```
+docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml down -v
+```
+
+`-v` drops the database volume too, which is what you want if you are
+rebuilding from the seed and not what you want otherwise.

@@ -1,0 +1,34 @@
+# TLS termination for the public deployment.
+#
+# Caddy is here for one reason: the SPA on Vercel is served over HTTPS, and a
+# page served over HTTPS may not call an API over plain HTTP -- the browser
+# blocks it as mixed content. So the API needs a certificate, and Caddy gets
+# one from Let's Encrypt on first boot and renews it without being asked.
+#
+# It proxies to the nginx container rather than to gunicorn directly, because
+# nginx already knows how to serve the SPA and route /api. That keeps one
+# routing table instead of two, and means the VM serves a complete working
+# copy of the app at this domain -- useful as a fallback if Vercel is ever
+# the thing that is broken.
+
+# There is deliberately no global `email` block. Caddy accepts an ACME
+# contact address, but the Caddyfile has no conditionals: an unset variable
+# leaves `email` with no argument, which is a parse error, and Caddy then
+# restart-loops without ever serving the site. A missing expiry reminder is
+# a smaller problem than that, so the address is opt-in -- to get the
+# reminders, uncomment these three lines and put your address in:
+#
+#     {
+#     	email you@example.com
+#     }
+
+{$RESNAV_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy web:80 {
+		# nginx and Flask both look at this to build absolute URLs. Without
+		# it they would see Caddy's plain-HTTP hop and advertise http:// links
+		# on an https:// site.
+		header_up X-Forwarded-Proto https
+	}
+}

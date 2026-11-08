@@ -1,0 +1,38 @@
+# Production overlay: the Phase 8 stack, plus TLS.
+#
+#     docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Run it from the repository root, not from deploy/ -- relative paths in an
+# overlay resolve against the first file's directory.
+#
+# This adds a service and changes nothing else. db, api and web are exactly
+# what Phase 8 tested; the base file already binds their published ports to
+# 127.0.0.1, so on a public VM nothing but Caddy is reachable from outside.
+
+name: resnav
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    # Pinned to a major, like mysql:8.4 -- a `docker compose pull` should not
+    # be able to change the proxy under a running site.
+    depends_on:
+      - web
+    environment:
+      RESNAV_DOMAIN: ${RESNAV_DOMAIN:?set RESNAV_DOMAIN in .env, e.g. resnav.duckdns.org}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live in a named volume. Lose this and Let's Encrypt will
+      # re-issue, but there is a rate limit on how often it will do that, so
+      # it is worth not losing.
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
