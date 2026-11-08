@@ -2,7 +2,7 @@
   "name": "resnav-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "ResNav AI — disaster relief resource intelligence platform (frontend).",
+  "description": "ResNav AI \u2014 disaster relief resource intelligence platform (frontend).",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:demo": "VITE_DEMO_MODE=true vite build",
     "preview": "vite preview",
     "lint": "eslint src --max-warnings 0",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\""
