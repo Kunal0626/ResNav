@@ -212,6 +212,25 @@ two. `docker compose ps` should show db, api and web healthy and caddy
 running. The whole app is then live at `https://<your-domain>` -- the VM
 serves a complete copy, which is worth checking before involving Vercel.
 
+## The demo deployment
+
+While nothing hosts the API, `frontend/vercel.json` builds with
+`npm run build:demo`, which sets `VITE_DEMO_MODE=true` so the SPA answers
+from the snapshot in `frontend/public/demo` instead of calling a backend
+that does not exist. `tools/snapshot_demo.py` regenerates that snapshot
+from a running stack; re-run it after changing the seed or the demo drifts
+from the database.
+
+Note that `vercel.json` rejects unknown keys anywhere in the file, nested
+ones included -- a `"comment"` key had been sitting in the rewrites block
+since Phase 8 and would have failed any deploy, which nothing caught
+because nothing had ever deployed. The rewrite it described sends every
+path that is not `assets/`, `demo/`, `favicon.svg` or `robots.txt` to the
+SPA shell, so client-side routes survive a page refresh.
+
+Once a real backend exists, put `buildCommand` back to `npm run build` and
+set `VITE_API_BASE_URL` as described below.
+
 ## 5. The SPA on Vercel
 
 From the repository root:

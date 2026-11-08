@@ -1,12 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "comment": "buildCommand is build:demo because nothing hosts the API yet, so this\n  deployment answers from the captured snapshot in public/demo. Point it back at\n  `npm run build` and set VITE_API_BASE_URL once a real backend exists.",
   "buildCommand": "npm run build:demo",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
     {
-      "comment": "Client-side routing: every path resolves to the SPA shell.",
       "source": "/((?!assets/|demo/|favicon.svg|robots.txt).*)",
       "destination": "/index.html"
     }
